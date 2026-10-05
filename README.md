@@ -31,7 +31,8 @@ docker compose -f compose.dev.yaml up -d --no-deps --build frontend
 # 4) If you changed Elixir code or DB logic, run the backend checks
 # inside the running backend container
 docker compose -f compose.dev.yaml exec backend mix compile
-docker compose -f compose.dev.yaml exec backend mix test
+# Explicitly select test config so Ecto SQL Sandbox is enabled.
+docker compose -f compose.dev.yaml exec -e MIX_ENV=test backend mix test
 
 # 5) If you changed Vue code, verify the frontend build
 cd theme2
@@ -72,13 +73,63 @@ Use these when you want to debug start-up failures, request errors, proxy issues
 Run these before pushing changes to `main`:
 
 ```powershell
-docker compose -f compose.dev.yaml exec backend mix test
+docker compose -f compose.dev.yaml exec -e MIX_ENV=test backend mix test
 docker compose -f compose.dev.yaml exec frontend npm run build
 docker build -t time-manager-backend:preflight ./theme1
 docker build -t time-manager-frontend:preflight ./theme2
 ```
 
 The first two commands test the development containers. The last two build the same production Dockerfiles used for deployment. Stop the development stack with `docker compose -f compose.dev.yaml down`; this keeps its database volume. Avoid `down -v` unless you intend to delete that local database.
+
+### Authentication setup
+
+Authentication uses PBKDF2 password hashes, Joken-signed JWTs, an HttpOnly `theme1_auth` cookie, and an `X-CSRF-Token` request header. The JWT is never exposed to frontend JavaScript.
+
+Add these values to the environment used by each deployment:
+
+```env
+AUTH_JWT_SECRET=your-strong-jwt-secret
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=your-strong-admin-password
+```
+
+`AUTH_JWT_SECRET` is required in production. `ADMIN_EMAIL` and `ADMIN_PASSWORD` are optional bootstrap values; when supplied, the seed script creates or promotes that account to administrator without printing the password. The production backend entrypoint runs Ecto migrations before starting Phoenix.
+
+The public authentication endpoints are:
+
+```text
+POST /api/auth/register
+POST /api/auth/login
+POST /api/auth/logout
+GET  /api/auth/csrf
+GET  /api/auth/session
+POST /api/auth/password
+POST /api/auth/password-reset/request
+POST /api/auth/password-reset/confirm
+```
+
+All user, clock, and working-time endpoints now require the JWT cookie and matching `X-CSRF-Token` header.
+
+Password reset responses are generic to prevent email enumeration. Local development exposes a reset token for testing; production must connect the reset-token delivery to the configured mail provider before enabling public recovery.
+
+The frontend and API are served from the same origin in production through Nginx, so no wildcard CORS policy is enabled. Phoenix adds `nosniff`, frame, referrer, permissions, and Content-Security-Policy headers at the endpoint boundary.
+
+Role and team permissions are exposed through these protected endpoints:
+
+```text
+GET    /api/roles
+GET    /api/teams
+PUT    /api/admin/users/:userID/role
+POST   /api/admin/teams
+POST   /api/admin/teams/:teamID/members/:userID
+DELETE /api/admin/teams/:teamID/members/:userID
+POST   /api/workingtime/:id/correction-requests
+GET    /api/reviews/correction-requests
+PUT    /api/reviews/correction-requests/:id
+```
+
+Only administrators can change roles, create teams, or change team membership. Users may belong to multiple teams.
+Employees can submit correction requests for their own working-time entries. Managers, HR/payroll, and administrators can review and approve or reject pending requests.
 
 ## Production
 

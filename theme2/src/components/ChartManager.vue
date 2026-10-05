@@ -35,6 +35,8 @@
 import WorkingHoursBarChart from "./WorkingHoursBarChart.vue";
 import WorkingHoursLineChart from "./WorkingHoursLineChart.vue";
 import WorkingHoursPieChart from "./WorkingHoursPieChart.vue";
+// Route chart data requests through the shared authenticated API helper.
+import { apiFetch } from "../services/auth";
 
 export default {
   name: "ChartManager",
@@ -121,7 +123,7 @@ export default {
       this.endDate = "";
 
       try {
-        const response = await fetch(`/api/workingtime/${uid}`);
+        const response = await apiFetch(`/api/workingtime/${uid}`);
 
         if (!response.ok) {
           throw new Error("Failed to get working times");

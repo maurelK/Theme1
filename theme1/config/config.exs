@@ -11,6 +11,9 @@ config :theme1,
   ecto_repos: [Theme1.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+# Development and test use a local JWT secret; production overrides it at runtime.
+config :theme1, :auth_jwt_secret, System.get_env("AUTH_JWT_SECRET", "dev-auth-secret-change-me")
+
 # Configure the endpoint
 config :theme1, Theme1Web.Endpoint,
   url: [host: "localhost"],

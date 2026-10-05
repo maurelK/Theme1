@@ -49,5 +49,7 @@ defmodule Theme1Web.Endpoint do
   plug Plug.MethodOverride
   plug Plug.Head
   plug Plug.Session, @session_options
+  # Apply browser security headers before requests enter the router.
+  plug Theme1Web.SecurityHeaders
   plug Theme1Web.Router
 end

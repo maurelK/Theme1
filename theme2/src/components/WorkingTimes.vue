@@ -128,6 +128,13 @@
                 >
                   Supprimer
                 </button>
+                <button
+                  class="btn-wt btn-secondary"
+                  style="padding: 6px 12px; font-size: 11px;"
+                  @click="requestCorrection(wt.id)"
+                >
+                  Demander une correction
+                </button>
               </div>
             </td>
           </tr>
@@ -139,6 +146,8 @@
 
 <script>
 import "./WorkingTime.css";
+// Route working-time list requests through the shared authenticated API helper.
+import { apiFetch } from "../services/auth";
 
 export default {
   name: "WorkingTimes",
@@ -265,7 +274,7 @@ export default {
           url += `?${queryString}`;
         }
 
-        const response = await fetch(url);
+        const response = await apiFetch(url);
         if (!response.ok) {
           throw new Error(`Erreur lors de la r?cup?ration (Status: ${response.status})`);
         }
@@ -284,7 +293,7 @@ export default {
       if (!confirm("Voulez-vous vraiment supprimer ce temps de travail ?")) return;
 
       try {
-        const response = await fetch(`/api/workingtime/${id}`, {
+        const response = await apiFetch(`/api/workingtime/${id}`, {
           method: 'DELETE'
         });
 
@@ -297,6 +306,25 @@ export default {
       } catch (err) {
         console.error(err);
         this.error = err.message || "Erreur lors de la suppression du cr?neau.";
+      }
+    },
+
+    // Submit an employee explanation without mutating the recorded time entry.
+    async requestCorrection(id) {
+      const reason = window.prompt("Pourquoi cette entrée doit-elle être corrigée ?");
+      if (!reason || !reason.trim()) return;
+
+      try {
+        const response = await apiFetch(`/api/workingtime/${id}/correction-requests`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: reason.trim() })
+        });
+
+        if (!response.ok) throw new Error("Impossible d'envoyer la demande de correction.");
+        this.successMessage = "Demande de correction envoyée.";
+      } catch (err) {
+        this.error = err.message;
       }
     },
 

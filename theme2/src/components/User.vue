@@ -4,7 +4,11 @@
       <a class="brand" href="#" aria-label="Time Manager home">
         <span class="brand-mark">T</span><span>Time Manager</span>
       </a>
-      <span class="workspace-label">Time Manager <span class="status-dot"></span></span>
+      <div class="workspace-actions">
+        <span class="workspace-label">{{ authUser?.role || "WORKSPACE" }} <span class="status-dot"></span></span>
+        <!-- Let authenticated users terminate the server-side session explicitly. -->
+        <button class="text-button" type="button" @click="signOut">Sign out</button>
+      </div>
     </header>
 
     <section class="hero">
@@ -183,6 +187,8 @@ import WorkingTimes from "./WorkingTimes.vue";
 import WorkingTime from "./WorkingTime.vue";
 import ClockManager from "./ClockManager.vue";
 import ChartManager from "./ChartManager.vue";
+// Route profile requests through the shared authenticated API helper.
+import { apiFetch, authState, logout } from "../services/auth";
 
 export default {
   name: "User",
@@ -208,6 +214,11 @@ export default {
   },
 
   computed: {
+    // Reflect the server-authorized role in the authenticated workspace header.
+    authUser() {
+      return authState.user;
+    },
+
     userInitials() {
       if (!this.user || !this.user.username) return "TM";
       const parts = this.user.username.trim().split(" ");
@@ -241,7 +252,7 @@ export default {
   methods: {
     async fetchAllUsers() {
       try {
-        const response = await fetch("/api/users");
+        const response = await apiFetch("/api/users");
         if (response.ok) {
           const data = await response.json();
           this.allUsers = Array.isArray(data) ? data : (data.data || []);
@@ -253,7 +264,7 @@ export default {
 
     async fetchUserById(id) {
       try {
-        const response = await fetch(`/api/users/${id}`);
+        const response = await apiFetch(`/api/users/${id}`);
         if (response.ok) {
           const data = await response.json();
           const found = data.data || data;
@@ -276,8 +287,15 @@ export default {
       this.searchEmail = u.email;
     },
 
+    // Clear authentication state and return to the public login route.
+    async signOut() {
+      await logout();
+      this.user = null;
+      await this.$router.push({ name: "Login" });
+    },
+
     async createUser() {
-      const response = await fetch("/api/users", {
+      const response = await apiFetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -301,7 +319,7 @@ export default {
     },
 
     async updateUser() {
-      const response = await fetch(`/api/users/${this.user.id}`, {
+      const response = await apiFetch(`/api/users/${this.user.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -320,7 +338,7 @@ export default {
     },
 
     async getUser() {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/users?email=${encodeURIComponent(this.searchEmail)}`
       );
 
@@ -340,7 +358,7 @@ export default {
     },
 
     async deleteUser() {
-      const response = await fetch(`/api/users/${this.user.id}`, {
+      const response = await apiFetch(`/api/users/${this.user.id}`, {
         method: "DELETE"
       });
 

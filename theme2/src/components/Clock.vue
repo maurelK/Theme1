@@ -1,6 +1,8 @@
 <script setup lang="ts">
   import moment from "moment";
   import { onMounted, ref, watch } from "vue";
+  // Route clock requests through the shared cookie and CSRF-aware API helper.
+  import { apiFetch } from "../services/auth";
 
   const props = defineProps<{
     userId?: number | string;
@@ -18,7 +20,7 @@
   async function loadClockStatus() {
     if (!props.userId || props.userId === 'undefined') return;
     try {
-      const response = await fetch(`/api/clocks/${props.userId}`);
+      const response = await apiFetch(`/api/clocks/${props.userId}`);
 
       if (!response.ok) {
         throw new Error("Failed to load clock status");
@@ -39,7 +41,7 @@
     loading.value = true;
 
     try {
-      const response = await fetch(`/api/clocks/${props.userId}`, {
+      const response = await apiFetch(`/api/clocks/${props.userId}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
