@@ -38,6 +38,9 @@ export async function initializeAuth() {
     const csrfData = await csrfResponse.json();
     authState.csrfToken = csrfData.csrf_token;
 
+    // No token means no session cookie; skip the session call entirely.
+    if (!authState.csrfToken) return;
+
     const sessionResponse = await apiFetch("/api/auth/session");
     if (sessionResponse.ok) {
       const sessionData = await sessionResponse.json();
