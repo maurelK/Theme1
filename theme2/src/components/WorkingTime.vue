@@ -96,6 +96,8 @@
 
 <script>
 import "./WorkingTime.css";
+// Route working-time requests through the shared authenticated API helper.
+import { apiFetch } from "../services/auth";
 
 export default {
   name: "WorkingTime",
@@ -210,9 +212,9 @@ export default {
       this.error = "";
 
       try {
-        const response = await fetch(`/api/workingtime/${this.currentUserId}/${this.currentWorkingTimeId}`);
+        const response = await apiFetch(`/api/workingtime/${this.currentUserId}/${this.currentWorkingTimeId}`);
         if (!response.ok) {
-          const fallbackResp = await fetch(`/api/workingtime/${this.currentUserId}`);
+          const fallbackResp = await apiFetch(`/api/workingtime/${this.currentUserId}`);
           if (!fallbackResp.ok) throw new Error("Impossible de r?cup?rer les d?tails du cr?neau.");
           const result = await fallbackResp.json();
           const items = result.data || result || [];
@@ -265,7 +267,7 @@ export default {
           }
         };
 
-        const response = await fetch(`/api/workingtime/${this.currentUserId}`, {
+        const response = await apiFetch(`/api/workingtime/${this.currentUserId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -308,7 +310,7 @@ export default {
           }
         };
 
-        const response = await fetch(`/api/workingtime/${this.currentWorkingTimeId}`, {
+        const response = await apiFetch(`/api/workingtime/${this.currentWorkingTimeId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -338,7 +340,7 @@ export default {
       this.error = "";
 
       try {
-        const response = await fetch(`/api/workingtime/${this.currentWorkingTimeId}`, {
+        const response = await apiFetch(`/api/workingtime/${this.currentWorkingTimeId}`, {
           method: 'DELETE'
         });
 

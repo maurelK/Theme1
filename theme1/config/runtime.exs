@@ -24,6 +24,20 @@ config :theme1, Theme1Web.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
 if config_env() == :prod do
+  # Production JWT signing must come from the VM environment, never from the image.
+  config :theme1, :auth_jwt_secret,
+    System.get_env("AUTH_JWT_SECRET") ||
+      raise "environment variable AUTH_JWT_SECRET is missing"
+
+  # Production reset links use the VM-configured SMTP adapter and public frontend URL.
+  config :theme1, Theme1.Mailer,
+    adapter: Swoosh.Adapters.SMTP,
+    relay: System.get_env("SMTP_RELAY") || raise("environment variable SMTP_RELAY is missing"),
+    port: String.to_integer(System.get_env("SMTP_PORT", "587")),
+    username: System.get_env("SMTP_USERNAME"),
+    password: System.get_env("SMTP_PASSWORD"),
+    ssl: System.get_env("SMTP_SSL", "true") == "true"
+
   database_url =
     System.get_env("DATABASE_URL") ||
       raise """
@@ -54,6 +68,15 @@ if config_env() == :prod do
       """
 
   host = System.get_env("PHX_HOST") || "example.com"
+
+  # Use the public IP frontend as a safe fallback when no domain is configured yet.
+  public_app_url =
+    case System.get_env("PUBLIC_APP_URL") do
+      value when is_binary(value) and value != "" -> value
+      _ -> "http://#{host}:8080"
+    end
+
+  config :theme1, :public_app_url, public_app_url
 
   config :theme1, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 

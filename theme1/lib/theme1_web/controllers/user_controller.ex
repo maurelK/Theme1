@@ -11,11 +11,22 @@ defmodule Theme1Web.UserController do
       User
       |> apply_filters(params)
       |> Repo.all()
+      |> Enum.filter(&can_access_user?(conn, &1))
 
     json(conn, Enum.map(users, &user_json/1))
   end
 
   def create(conn, params) do
+    if not administrator?(conn) do
+      conn
+      |> put_status(:forbidden)
+      |> json(%{error: "Only administrators can create users here"})
+    else
+      create_user(conn, params)
+    end
+  end
+
+  defp create_user(conn, params) do
     changeset = User.changeset(%User{}, params)
 
     case Repo.insert(changeset) do
@@ -41,7 +52,13 @@ defmodule Theme1Web.UserController do
             |> json(%{error: "User not found"})
 
         user ->
-            json(conn, user_json(user))
+            if can_access_user?(conn, user) do
+              json(conn, user_json(user))
+            else
+              conn
+              |> put_status(:forbidden)
+              |> json(%{error: "You cannot access this user"})
+            end
     end
   end
 
@@ -53,20 +70,22 @@ defmodule Theme1Web.UserController do
             |> json(%{error: "User not found"})
 
         user ->
-            changeset = User.changeset(user, params)
+            if can_access_user?(conn, user) do
+              changeset = User.changeset(user, params)
 
-        case Repo.update(changeset) do
-            {:ok, updated_user} ->
-            json(conn, user_json(updated_user))
-
-            {:error, changeset} ->
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{
-                errors: errors_from_changeset(changeset)
-            })
+              case Repo.update(changeset) do
+                {:ok, updated_user} -> json(conn, user_json(updated_user))
+                {:error, changeset} ->
+                  conn
+                  |> put_status(:unprocessable_entity)
+                  |> json(%{errors: errors_from_changeset(changeset)})
+              end
+            else
+              conn
+              |> put_status(:forbidden)
+              |> json(%{error: "You cannot update this user"})
+            end
         end
-    end
   end
 
   def delete(conn, %{"userID" => user_id}) do
@@ -77,16 +96,20 @@ defmodule Theme1Web.UserController do
             |> json(%{error: "User not found"})
 
         user ->
-            case Repo.delete(user) do
-                {:ok, _deleted_user} ->
-                send_resp(conn, :no_content, "")
-
+            if can_access_user?(conn, user) do
+              case Repo.delete(user) do
+                {:ok, _deleted_user} -> send_resp(conn, :no_content, "")
                 {:error, _changeset} ->
-                conn
-                |> put_status(:unprocessable_entity)
-                |> json(%{error: "Could not delete user"})
+                  conn
+                  |> put_status(:unprocessable_entity)
+                  |> json(%{error: "Could not delete user"})
+              end
+            else
+              conn
+              |> put_status(:forbidden)
+              |> json(%{error: "You cannot delete this user"})
             end
-    end
+        end
   end
 
   defp apply_filters(query, params) do
@@ -113,6 +136,32 @@ defmodule Theme1Web.UserController do
       username: user.username,
       email: user.email
     }
+  end
+
+  # Enforce ownership for employees and team scope for managers.
+  defp can_access_user?(conn, user) do
+    case role_name(conn) do
+      role when role in ["administrator", "hr_payroll"] -> true
+      "manager" -> manager_can_access?(conn.assigns.current_user, user.id)
+      _ -> conn.assigns.current_user.id == user.id
+    end
+  end
+
+  defp manager_can_access?(manager, user_id) do
+    manager
+    |> Repo.preload(:teams)
+    |> Map.get(:teams)
+    |> Enum.map(& &1.id)
+    |> then(fn team_ids ->
+      Repo.exists?(from membership in Theme1.TeamMembership,
+        where: membership.user_id == ^user_id and membership.team_id in ^team_ids)
+    end)
+  end
+
+  defp administrator?(conn), do: role_name(conn) == "administrator"
+
+  defp role_name(conn) do
+    conn.assigns.current_user.role && conn.assigns.current_user.role.name
   end
 
   defp errors_from_changeset(changeset) do

@@ -1,13 +1,4 @@
-<script>
-import User from "./components/User.vue";
-
-export default {
-  components: {
-    User
-  }
-};
-</script>
-
 <template>
-  <User />
+  <!-- The router now controls public auth pages and protected workspaces. -->
+  <RouterView />
 </template>

@@ -51,7 +51,10 @@ defmodule Theme1.MixProject do
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      # Authentication dependencies provide portable password hashing and JWT signing.
+      {:pbkdf2_elixir, "~> 2.2"},
+      {:joken, "~> 2.6"}
     ]
   end
 

@@ -5,6 +5,59 @@ defmodule Theme1Web.Router do
     plug :accepts, ["json"]
   end
 
+  # Authentication routes issue or clear the session cookie and are publicly reachable.
+  scope "/api/auth", Theme1Web do
+    pipe_through :api
+
+    post "/register", AuthController, :register
+    post "/login", AuthController, :login
+    get "/csrf", AuthController, :csrf
+    post "/password-reset/request", AuthController, :request_password_reset
+    post "/password-reset/confirm", AuthController, :reset_password
+  end
+
+  # Session restoration requires the signed JWT and matching CSRF header.
+  pipeline :authenticated_api do
+    plug Theme1Web.AuthPlug
+  end
+
+  # Administrator routes require both authentication and an administrator role.
+  pipeline :administrator_api do
+    plug Theme1Web.RolePlug, :administrator
+  end
+
+  # Review routes are available to managers, HR/payroll, and administrators.
+  pipeline :reviewer_api do
+    plug Theme1Web.RolePlug, [:manager, :hr_payroll, :administrator]
+  end
+
+  scope "/api/auth", Theme1Web do
+    pipe_through [:api, :authenticated_api]
+
+    # Logout is state-changing, so it must carry the same JWT and CSRF proof.
+    post "/logout", AuthController, :logout
+    get "/session", AuthController, :session
+    post "/password", AuthController, :change_password
+  end
+
+  # Authenticated clients may read the fixed role catalog, but cannot mutate it.
+  scope "/api", Theme1Web do
+    pipe_through [:api, :authenticated_api]
+
+    get "/roles", RoleController, :index
+    get "/teams", TeamController, :index
+  end
+
+  # Role promotion and demotion are restricted to administrators.
+  scope "/api/admin", Theme1Web do
+    pipe_through [:api, :authenticated_api, :administrator_api]
+
+    put "/users/:userID/role", AdminController, :update_role
+    post "/teams", TeamController, :create
+    post "/teams/:teamID/members/:userID", TeamController, :add_member
+    delete "/teams/:teamID/members/:userID", TeamController, :remove_member
+  end
+
   scope "/", Theme1Web do
     pipe_through :api
 
@@ -12,7 +65,9 @@ defmodule Theme1Web.Router do
   end
 
   scope "/api", Theme1Web do
-    pipe_through :api
+    # All existing business data now requires a verified JWT and CSRF header.
+    pipe_through [:api, :authenticated_api]
+    post "/workingtime/:id/correction-requests", CorrectionRequestController, :create
     #Clock
     get "/clocks/:userID", ClockController, :index
     post "/clocks/:userID", ClockController, :create 
@@ -27,6 +82,14 @@ defmodule Theme1Web.Router do
     get "/users/:userID", UserController, :show
     put "/users/:userID", UserController, :update
     delete "/users/:userID", UserController, :delete
+  end
+
+  # Reviewers can inspect and decide employee correction requests.
+  scope "/api/reviews", Theme1Web do
+    pipe_through [:api, :authenticated_api, :reviewer_api]
+
+    get "/correction-requests", CorrectionRequestController, :index
+    put "/correction-requests/:id", CorrectionRequestController, :review
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
