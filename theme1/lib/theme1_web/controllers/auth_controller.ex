@@ -85,13 +85,14 @@ defmodule Theme1Web.AuthController do
     |> json(%{ok: true})
   end
 
-  # Bootstrap the browser CSRF token from a valid HttpOnly authentication cookie.
+    # Report the caller's CSRF state. Anonymous visitors receive a null token
+  # instead of a 401 so the frontend can bootstrap without treating this as an error.
   def csrf(conn, _params) do
     conn = fetch_cookies(conn)
 
     case conn.cookies["theme1_auth"] && Auth.csrf_token_from_jwt(conn.cookies["theme1_auth"]) do
       {:ok, csrf_token} -> json(conn, %{csrf_token: csrf_token})
-      _ -> conn |> put_status(:unauthorized) |> json(%{error: "Authentication required"})
+      _ -> json(conn, %{csrf_token: nil})
     end
   end
 
