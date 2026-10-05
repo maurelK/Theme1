@@ -121,10 +121,12 @@ defmodule Theme1Web.AuthController do
     put_resp_cookie(conn, "theme1_auth", jwt, cookie_options())
   end
 
-  defp cookie_options do
+    defp cookie_options do
     [
       http_only: true,
-      secure: System.get_env("MIX_ENV") == "prod",
+      # TEMPORARY: secure is env-gated so the app works over plain HTTP on the
+      # current IP-only Oracle deployment. Set COOKIE_SECURE=true once HTTPS is live.
+      secure: System.get_env("COOKIE_SECURE") == "true",
       same_site: "Lax",
       max_age: 86_400,
       path: "/"
