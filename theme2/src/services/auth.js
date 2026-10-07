@@ -1,5 +1,5 @@
 import { reactive } from "vue";
-
+const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 // Keep the JWT in the HttpOnly cookie and retain only safe session data in memory.
 export const authState = reactive({
   user: null,
@@ -22,7 +22,7 @@ export async function apiFetch(path, options = {}) {
     headers.set("X-CSRF-Token", authState.csrfToken);
   }
 
-  return fetch(path, {
+  return fetch(API_BASE + path, {
     ...options,
     credentials: "include",
     headers
@@ -30,6 +30,29 @@ export async function apiFetch(path, options = {}) {
 }
 
 // Restore the browser session after a refresh without reading the JWT.
+// export async function initializeAuth() {
+//   try {
+//     const csrfResponse = await apiFetch("/api/auth/csrf");
+//     if (!csrfResponse.ok) return;
+
+//     const csrfData = await csrfResponse.json();
+//     authState.csrfToken = csrfData.csrf_token;
+
+//     // No token means no session cookie; skip the session call entirely.
+//     if (!authState.csrfToken) return;
+
+//     const sessionResponse = await apiFetch("/api/auth/session");
+//     if (sessionResponse.ok) {
+//       const sessionData = await sessionResponse.json();
+//       authState.user = sessionData.user;
+//     }
+//   } finally {
+//     authState.initialized = true;
+//   }
+// }
+
+// Restore the browser session after a refresh without reading the JWT.
+// If the API is unreachable (offline, network error), the app still starts without a session.
 export async function initializeAuth() {
   try {
     const csrfResponse = await apiFetch("/api/auth/csrf");
@@ -46,6 +69,8 @@ export async function initializeAuth() {
       const sessionData = await sessionResponse.json();
       authState.user = sessionData.user;
     }
+  } catch (error) {
+    console.warn("Session non restaurée :", error);
   } finally {
     authState.initialized = true;
   }

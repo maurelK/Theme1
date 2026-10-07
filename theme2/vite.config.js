@@ -1,26 +1,72 @@
-import { fileURLToPath, URL } from 'node:url'
+// import { fileURLToPath, URL } from 'node:url'
 
+// import { defineConfig } from 'vite'
+// import vue from '@vitejs/plugin-vue'
+
+// // https://vite.dev/config/
+// export default defineConfig({
+//   plugins: [
+//     vue(),
+//   ],
+
+//   server: {
+//     proxy: {
+//       '/api': {
+//         target: process.env.VITE_API_PROXY_TARGET || process.env.API_PROXY_TARGET || 'http://localhost:4000',
+//         changeOrigin: true,
+//       },
+//     },
+//   },
+
+//   resolve: {
+//     alias: {
+//       '@': fileURLToPath(new URL('./src', import.meta.url)),
+//     },
+//   },
+// })
+
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [
-    vue(),
-  ],
-
-  server: {
-    proxy: {
-      '/api': {
-        target: process.env.VITE_API_PROXY_TARGET || process.env.API_PROXY_TARGET || 'http://localhost:4000',
-        changeOrigin: true,
+// Ajoute <script src="cordova.js"> uniquement dans le build mobile
+function injectCordovaScript(isCordova) {
+  return {
+    name: 'inject-cordova-js',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        if (!isCordova) return html
+        return html.replace('</head>', '  <script src="cordova.js"></script>\n  </head>')
       },
     },
-  },
+  }
+}
 
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
+// https://vite.dev/config/
+export default defineConfig(({ mode }) => {
+  const isCordova = mode === 'cordova'
+
+  return {
+    plugins: [vue(), injectCordovaScript(isCordova)],
+
+    base: isCordova ? './' : '/',
+    // build: isCordova ? { outDir: '../mobile/www', emptyOutDir: true } : {},
+    build: isCordova ? { outDir: '../mobile/www', emptyOutDir: true, target: 'chrome69', cssTarget: 'chrome69' } : {},
+
+    server: {
+      proxy: {
+        '/api': {
+          target: process.env.VITE_API_PROXY_TARGET || process.env.API_PROXY_TARGET || 'http://localhost:4000',
+          changeOrigin: true,
+        },
+      },
     },
-  },
+
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+      },
+    },
+  }
 })
