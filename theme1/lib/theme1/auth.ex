@@ -2,7 +2,7 @@ defmodule Theme1.Auth do
   import Ecto.Query
 
   alias Theme1.{Repo, Role, User}
-  alias Theme1.PasswordResetToken
+  alias Theme1.{InvitationToken, PasswordResetToken}
 
   # Authenticate credentials and return only a safe user projection plus JWT data.
   def authenticate(email, password) when is_binary(email) and is_binary(password) do
@@ -36,6 +36,87 @@ defmodule Theme1.Auth do
       {:error, changeset} -> {:error, changeset}
     end
   end
+
+  # Roles that may be assigned at invite time. Administrator is excluded so
+  # privilege escalation is a separate, auditable action (the "Save role"
+  # control on the admin dashboard).
+  @invitable_roles ~w(employee manager hr_payroll)
+
+  # Create an invited user with no password and email them a single-use set-password link.
+  # Only administrators should call this (enforced at the controller layer).
+  def invite_user(attrs) when is_map(attrs) do
+    role_name = attrs["role"] || attrs[:role] || "employee"
+
+    cond do
+      role_name not in @invitable_roles ->
+        {:error, :role_not_invitable}
+
+      true ->
+        with %Role{id: role_id} <- Repo.get_by(Role, name: role_name),
+             changeset <-
+               %User{}
+               |> User.changeset(attrs)
+               |> Ecto.Changeset.put_change(:role_id, role_id),
+             {:ok, user} <- Repo.insert(changeset) do
+          user = Repo.preload(user, :role)
+          send_invitation(user)
+          {:ok, user}
+        else
+          nil -> {:error, :role_missing}
+          {:error, changeset} -> {:error, changeset}
+        end
+    end
+  end
+
+  # Generate and store a fresh invitation token, then email the accept link.
+  defp send_invitation(%User{} = user) do
+    token = random_token()
+    expires_at = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(86_400, :second)
+
+    %InvitationToken{}
+    |> Ecto.Changeset.change(%{
+      user_id: user.id,
+      token_digest: digest_token(token),
+      expires_at: expires_at
+    })
+    |> Repo.insert()
+    |> case do
+      {:ok, _invitation} ->
+        deliver_invitation_email(user.email, token)
+        {:ok, token}
+
+      error ->
+        error
+    end
+  end
+
+  # Consume an invitation token exactly once and set the initial password.
+  def accept_invitation(token, password) when is_binary(token) and is_binary(password) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    query =
+      from invitation in InvitationToken,
+        where: invitation.token_digest == ^digest_token(token),
+        where: is_nil(invitation.used_at) and invitation.expires_at > ^now,
+        preload: [:user]
+
+    case Repo.one(query) do
+      %InvitationToken{} = invitation ->
+        Ecto.Multi.new()
+        |> Ecto.Multi.update(:user, User.password_changeset(invitation.user, %{password: password}))
+        |> Ecto.Multi.update(:token, Ecto.Changeset.change(invitation, used_at: now))
+        |> Repo.transaction()
+        |> case do
+          {:ok, _changes} -> :ok
+          {:error, _step, changeset, _changes} -> {:error, changeset}
+        end
+
+      nil ->
+        {:error, :invalid_or_expired_token}
+    end
+  end
+
+  def accept_invitation(_token, _password), do: {:error, :invalid_or_expired_token}
 
   # Require the existing password before replacing the stored password hash.
   def change_password(%User{} = user, current_password, new_password)
@@ -195,6 +276,24 @@ defmodule Theme1.Auth do
     error ->
       require Logger
       Logger.error("Password reset email delivery failed: #{Exception.message(error)}")
+      :ok
+  end
+
+  # Deliver the invitation link through the configured mail adapter.
+  defp deliver_invitation_email(email, token) do
+    base_url = Application.get_env(:theme1, :public_app_url) || System.get_env("PUBLIC_APP_URL", "http://localhost:5173")
+    invite_url = "#{base_url}/accept-invite?token=#{URI.encode_www_form(token)}"
+
+    Swoosh.Email.new()
+    |> Swoosh.Email.to(email)
+    |> Swoosh.Email.from(System.get_env("MAILER_FROM", "no-reply@timemanager.local"))
+    |> Swoosh.Email.subject("You're invited to Time Manager")
+    |> Swoosh.Email.text_body("Set up your account within 24 hours: #{invite_url}")
+    |> Theme1.Mailer.deliver()
+  rescue
+    error ->
+      require Logger
+      Logger.error("Invitation email delivery failed: #{Exception.message(error)}")
       :ok
   end
 end
