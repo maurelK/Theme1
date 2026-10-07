@@ -19,6 +19,8 @@ services:
     build:
       context: ./theme1
       dockerfile: Dockerfile.dev
+    env_file:
+      - .env
     environment:
       MIX_ENV: dev
       DATABASE_URL: ecto://postgres:postgres@db:5432/theme1_dev
@@ -26,6 +28,8 @@ services:
       # Local JWT signing is isolated to the development stack.
       AUTH_JWT_SECRET: dev-auth-secret-change-me
       SECRET_KEY_BASE: dev-only-secret-key-base-not-for-production-0123456789-0123456789
+      PUBLIC_APP_URL: http://localhost:5173
+      MAILER_FROM: no-reply@timemanager.local
     depends_on:
       db:
         condition: service_healthy

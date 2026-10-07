@@ -104,6 +104,19 @@ export async function resetPassword(token, newPassword) {
   return data;
 }
 
+// Complete an invitation by setting the initial password with the single-use token.
+export async function acceptInvitation(token, newPassword) {
+  const response = await apiFetch("/api/auth/accept-invitation", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword })
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Unable to accept invitation");
+  return data;
+}
+
 // Clear the server cookie and the in-memory session state together.
 export async function logout() {
   await apiFetch("/api/auth/logout", { method: "POST" });

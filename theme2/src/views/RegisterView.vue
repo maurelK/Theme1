@@ -8,8 +8,12 @@
         <input id="register-name" v-model="username" type="text" required autocomplete="name">
         <label for="register-email">Email address</label>
         <input id="register-email" v-model="email" type="email" required autocomplete="email">
-        <label for="register-password">Password</label>
-        <input id="register-password" v-model="password" type="password" minlength="8" required autocomplete="new-password">
+        <PasswordField
+          v-model="password"
+          label="Password"
+          input-id="register-password"
+          autocomplete="new-password"
+        />
         <p v-if="error" class="wt-alert wt-alert-error">{{ error }}</p>
         <button class="button button-primary" type="submit" :disabled="loading">
           {{ loading ? "Creating account..." : "Create account" }}
@@ -24,6 +28,7 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { register } from "../services/auth";
+import PasswordField from "../components/PasswordField.vue";
 
 // Registration intentionally creates only the default employee role.
 const router = useRouter();

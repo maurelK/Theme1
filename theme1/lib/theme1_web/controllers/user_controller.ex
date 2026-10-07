@@ -27,21 +27,27 @@ defmodule Theme1Web.UserController do
   end
 
   defp create_user(conn, params) do
-    changeset = User.changeset(%User{}, params)
+    case Theme1.Auth.invite_user(params) do
+      {:ok, user} ->
+        conn
+        |> put_status(:created)
+        |> json(user_json(user))
 
-    case Repo.insert(changeset) do
-        {:ok, user} ->
-            conn
-            |> put_status(:created)
-            |> json(user_json(user))
+      {:error, :role_missing} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Role does not exist"})
 
-        {:error, changeset} ->
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{
-            errors: errors_from_changeset(changeset)
-            })
-        end
+      {:error, :role_not_invitable} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "This role cannot be assigned at invite time"})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: errors_from_changeset(changeset)})
+    end
   end
 
   def show(conn, %{"userID" => user_id}) do
@@ -134,7 +140,8 @@ defmodule Theme1Web.UserController do
     %{
       id: user.id,
       username: user.username,
-      email: user.email
+      email: user.email,
+      role: if(Ecto.assoc_loaded?(user.role) && user.role, do: user.role.name, else: nil)
     }
   end
 

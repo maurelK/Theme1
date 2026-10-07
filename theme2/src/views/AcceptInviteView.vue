@@ -1,20 +1,20 @@
 <template>
   <main class="page-shell auth-shell">
     <section class="auth-panel">
-      <p class="eyebrow">Account recovery</p>
-      <h1>Choose a new password.</h1>
+      <p class="eyebrow">Welcome</p>
+      <h1>Set up your account.</h1>
       <form class="search-form" @submit.prevent="submit">
-        <label for="reset-token">Reset token</label>
-        <input id="reset-token" v-model="token" type="text" required>
+        <label for="invite-token">Invitation token</label>
+        <input id="invite-token" v-model="token" type="text" required>
         <PasswordField
           v-model="password"
-          label="New password"
-          input-id="reset-password"
+          label="Choose a password"
+          input-id="invite-password"
           autocomplete="new-password"
         />
         <p v-if="message" class="wt-alert wt-alert-success">{{ message }}</p>
         <p v-if="error" class="wt-alert wt-alert-error">{{ error }}</p>
-        <button class="button button-primary" type="submit" :disabled="loading">{{ loading ? "Updating..." : "Update password" }}</button>
+        <button class="button button-primary" type="submit" :disabled="loading">{{ loading ? "Creating account..." : "Create account" }}</button>
       </form>
       <p class="muted"><RouterLink to="/login">Back to sign in</RouterLink></p>
     </section>
@@ -24,10 +24,10 @@
 <script setup>
 import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { resetPassword } from "../services/auth";
+import { acceptInvitation } from "../services/auth";
 import PasswordField from "../components/PasswordField.vue";
 
-// Accept tokens from the recovery link while allowing local development to paste one manually.
+// Accept tokens from the invitation link while allowing local development to paste one manually.
 const route = useRoute();
 const router = useRouter();
 const token = ref(route.query.token || "");
@@ -41,10 +41,10 @@ async function submit() {
   error.value = "";
 
   try {
-    await resetPassword(token.value, password.value);
-    message.value = "Password updated. You can sign in now.";
+    await acceptInvitation(token.value, password.value);
+    message.value = "Account ready. Redirecting to sign in...";
     password.value = "";
-    await router.push("/login");
+    setTimeout(() => router.push("/login"), 1200);
   } catch (reason) {
     error.value = reason.message;
   } finally {
