@@ -78,6 +78,30 @@ defmodule Theme1Web.AuthController do
 
   def reset_password(conn, _params), do: conn |> put_status(:unprocessable_entity) |> json(%{error: "Reset token and new password are required"})
 
+  # Consume an invitation token and set the initial password for an invited user.
+  def accept_invitation(conn, %{"token" => token, "new_password" => new_password}) do
+    case Auth.accept_invitation(token, new_password) do
+      :ok ->
+        json(conn, %{ok: true})
+
+      {:error, :invalid_or_expired_token} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Invalid or expired invitation token"})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end)})
+    end
+  end
+
+  def accept_invitation(conn, _params) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{error: "Invitation token and new password are required"})
+  end
+  
   # Remove the browser authentication cookie without returning token material.
   def logout(conn, _params) do
     conn

@@ -6,8 +6,12 @@
       <form class="search-form" @submit.prevent="submit">
         <label for="reset-token">Reset token</label>
         <input id="reset-token" v-model="token" type="text" required>
-        <label for="reset-password">New password</label>
-        <input id="reset-password" v-model="password" type="password" minlength="8" required autocomplete="new-password">
+        <PasswordField
+          v-model="password"
+          label="New password"
+          input-id="reset-password"
+          autocomplete="new-password"
+        />
         <p v-if="message" class="wt-alert wt-alert-success">{{ message }}</p>
         <p v-if="error" class="wt-alert wt-alert-error">{{ error }}</p>
         <button class="button button-primary" type="submit" :disabled="loading">{{ loading ? "Updating..." : "Update password" }}</button>
@@ -21,6 +25,7 @@
 import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { resetPassword } from "../services/auth";
+import PasswordField from "../components/PasswordField.vue";
 
 // Accept tokens from the recovery link while allowing local development to paste one manually.
 const route = useRoute();

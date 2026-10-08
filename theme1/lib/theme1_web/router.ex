@@ -14,6 +14,7 @@ defmodule Theme1Web.Router do
     get "/csrf", AuthController, :csrf
     post "/password-reset/request", AuthController, :request_password_reset
     post "/password-reset/confirm", AuthController, :reset_password
+    post "/accept-invitation", AuthController, :accept_invitation
   end
 
   # Session restoration requires the signed JWT and matching CSRF header.

@@ -129,6 +129,7 @@ import RegisterView from "../views/RegisterView.vue";
 import DashboardView from "../views/DashboardView.vue";
 import ForgotPasswordView from "../views/ForgotPasswordView.vue";
 import ResetPasswordView from "../views/ResetPasswordView.vue";
+import AcceptInviteView from "../views/AcceptInviteView.vue";
 import { authState, initializeAuth } from "../services/auth";
 
 // Mobile build (vite build --mode cordova): hash URLs, no dashboards.
@@ -204,6 +205,12 @@ const router = createRouter({
       path: '/reset-password',
       name: 'ResetPassword',
       component: ResetPasswordView,
+      meta: { guestOnly: true }
+    },
+        {
+      path: '/accept-invite',
+      name: 'AcceptInvite',
+      component: AcceptInviteView,
       meta: { guestOnly: true }
     },
     {
