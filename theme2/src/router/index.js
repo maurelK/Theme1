@@ -5,7 +5,6 @@ import WorkingTime from "../components/WorkingTime.vue";
 import ClockManager from "../components/ClockManager.vue";
 import User from "../components/User.vue";
 import LoginView from "../views/LoginView.vue";
-import RegisterView from "../views/RegisterView.vue";
 import DashboardView from "../views/DashboardView.vue";
 import ForgotPasswordView from "../views/ForgotPasswordView.vue";
 import ResetPasswordView from "../views/ResetPasswordView.vue";
@@ -45,9 +44,7 @@ const router = createRouter({
     },
     {
       path: '/register',
-      name: 'Register',
-      component: RegisterView,
-      meta: { guestOnly: true }
+      redirect: '/login'
     },
     {
       path: '/forgot-password',

@@ -9,7 +9,6 @@ defmodule Theme1Web.Router do
   scope "/api/auth", Theme1Web do
     pipe_through :api
 
-    post "/register", AuthController, :register
     post "/login", AuthController, :login
     get "/csrf", AuthController, :csrf
     post "/password-reset/request", AuthController, :request_password_reset

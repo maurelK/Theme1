@@ -35,15 +35,6 @@ defmodule Theme1.User do
     |> unique_constraint(:email)
   end
 
-  # Registration hashes passwords before persistence and never stores plaintext credentials.
-  def registration_changeset(user, attrs) do
-    user
-    |> changeset(attrs)
-    |> cast(attrs, [:password])
-    |> validate_password_strength()
-    |> put_password_hash()
-  end
-
   # Password changes reuse the same rules without allowing profile fields through.
   def password_changeset(user, attrs) do
     user
