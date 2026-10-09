@@ -52,14 +52,12 @@
                 <button type="button" class="btn-wt" :class="activeTab === 'workingTimes' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'workingTimes'">Working Times</button>
                 <button type="button" class="btn-wt" :class="activeTab === 'clock' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'clock'">Clock Manager</button>
                 <button type="button" class="btn-wt tab-nav-desktop-only" :class="activeTab === 'charts' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'charts'">Dashboard</button>
-                <button type="button" class="btn-wt" :class="activeTab === 'create' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'create'">Create Entry</button>
               </div>
 
               <div class="tab-content-area">
                 <WorkingTimes v-if="activeTab === 'workingTimes'" :userId="user.id" @go-create-entry="activeTab = 'create'" />
                 <ClockManager v-else-if="activeTab === 'clock'" :userId="user.id" />
                 <ChartManager v-else-if="activeTab === 'charts'" :userId="user.id" />
-                <WorkingTime v-else-if="activeTab === 'create'" :userId="user.id" />
               </div>
             </div>
           </div>
@@ -248,7 +246,7 @@ export default {
     };
   },
 
-    computed: {
+  computed: {
     // Reflect the server-authorized role in the authenticated workspace header.
     authUser() {
       return authState.user;
@@ -305,6 +303,7 @@ export default {
       this.fetchAllUsers();
     }
   },
+
   methods: {
     async fetchAllUsers() {
       // Directory listing is for privileged roles only.

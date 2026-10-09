@@ -25,18 +25,6 @@ defmodule Theme1.Auth do
 
   def authenticate(_email, _password), do: {:error, :invalid_credentials}
 
-  # Register new users as employees until an administrator changes their role.
-  def register_user(attrs) when is_map(attrs) do
-    with %Role{id: role_id} <- Repo.get_by(Role, name: "employee"),
-         changeset <- User.registration_changeset(%User{}, attrs) |> Ecto.Changeset.put_change(:role_id, role_id),
-         {:ok, user} <- Repo.insert(changeset) do
-      {:ok, Repo.preload(user, :role)}
-    else
-      nil -> {:error, :employee_role_missing}
-      {:error, changeset} -> {:error, changeset}
-    end
-  end
-
   # Roles that may be assigned at invite time. Administrator is excluded so
   # privilege escalation is a separate, auditable action (the "Save role"
   # control on the admin dashboard).

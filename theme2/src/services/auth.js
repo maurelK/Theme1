@@ -67,19 +67,6 @@ export async function login(credentials) {
   return data.user;
 }
 
-// Register accounts as employees through the public registration endpoint.
-export async function register(attributes) {
-  const response = await apiFetch("/api/auth/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(attributes)
-  });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Unable to register");
-  return data.user;
-}
-
 // Request reset instructions without revealing whether an email exists.
 export async function requestPasswordReset(email) {
   const response = await apiFetch("/api/auth/password-reset/request", {

@@ -3,26 +3,6 @@ defmodule Theme1Web.AuthController do
 
   alias Theme1.Auth
 
-  # Create an employee account without exposing the password or hash.
-  def register(conn, params) do
-    case Auth.register_user(params) do
-      {:ok, user} ->
-        conn
-        |> put_status(:created)
-        |> json(%{user: Auth.public_user(user)})
-
-      {:error, changeset} when is_struct(changeset, Ecto.Changeset) ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{errors: Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end)})
-
-      {:error, reason} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{error: inspect(reason)})
-    end
-  end
-
   # Issue an HttpOnly JWT cookie and return only the CSRF token to the browser.
   def login(conn, %{"email" => email, "password" => password}) do
     case Auth.authenticate(email, password) do
