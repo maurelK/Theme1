@@ -149,20 +149,9 @@ defmodule Theme1Web.UserController do
   defp can_access_user?(conn, user) do
     case role_name(conn) do
       role when role in ["administrator", "hr_payroll"] -> true
-      "manager" -> manager_can_access?(conn.assigns.current_user, user.id)
+      "manager" -> Theme1.Scope.manager_covers?(conn.assigns.current_user, user.id)
       _ -> conn.assigns.current_user.id == user.id
     end
-  end
-
-  defp manager_can_access?(manager, user_id) do
-    manager
-    |> Repo.preload(:teams)
-    |> Map.get(:teams)
-    |> Enum.map(& &1.id)
-    |> then(fn team_ids ->
-      Repo.exists?(from membership in Theme1.TeamMembership,
-        where: membership.user_id == ^user_id and membership.team_id in ^team_ids)
-    end)
   end
 
   defp administrator?(conn), do: role_name(conn) == "administrator"

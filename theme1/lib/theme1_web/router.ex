@@ -53,9 +53,14 @@ defmodule Theme1Web.Router do
     pipe_through [:api, :authenticated_api, :administrator_api]
 
     put "/users/:userID/role", AdminController, :update_role
+    get "/users/:userID/shift", AdminController, :show_user_shift
+    put "/users/:userID/shift", AdminController, :update_user_shift
+
     post "/teams", TeamController, :create
     post "/teams/:teamID/members/:userID", TeamController, :add_member
     delete "/teams/:teamID/members/:userID", TeamController, :remove_member
+    get "/teams/:teamID/shift", AdminController, :show_team_shift
+    put "/teams/:teamID/shift", AdminController, :update_team_shift
   end
 
   scope "/", Theme1Web do
@@ -68,9 +73,11 @@ defmodule Theme1Web.Router do
     # All existing business data now requires a verified JWT and CSRF header.
     pipe_through [:api, :authenticated_api]
     post "/workingtime/:id/correction-requests", CorrectionRequestController, :create
-    #Clock
-    get "/clocks/:userID", ClockController, :index
-    post "/clocks/:userID", ClockController, :create 
+    # Clock (clock-in / clock-out / status). All roles can clock; admins and
+    # managers can clock on behalf of users they cover.
+    post "/clocks/:userID/in", ClockController, :clock_in
+    post "/clocks/:userID/out", ClockController, :clock_out
+    get "/clocks/:userID/status", ClockController, :status
     get "/workingtime/:userID", WorkingTimeController, :index
     get "/workingtime/:userID/:id", WorkingTimeController, :show
     post "/workingtime/:userID", WorkingTimeController, :create

@@ -10,6 +10,7 @@ defmodule Theme1.Application do
     children = [
       Theme1Web.Telemetry,
       Theme1.Repo,
+      {Oban, Application.fetch_env!(:theme1, Oban)},
       {DNSCluster, query: Application.get_env(:theme1, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Theme1.PubSub},
       # Start a worker by calling: Theme1.Worker.start_link(arg)
