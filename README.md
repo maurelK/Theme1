@@ -9,7 +9,9 @@ Install Docker Desktop with Docker Compose, then run the full development stack 
 ```powershell
 docker compose -f compose.dev.yaml up --build
 ```
-
+```Maurel World
+docker compose -f .\compose.dev.yaml config --quiet
+```
 Compose runs PostgreSQL, Phoenix, and Vite in containers. The backend installs Elixir dependencies from `mix.lock`, and the frontend runs `npm ci` from `package-lock.json`. Open `http://localhost:5173`; Vite proxies API requests to the backend container. The backend is also published at `http://localhost:4000`, and PostgreSQL is available to local tools such as pgAdmin at `localhost:5433`.
 
 ### After each change

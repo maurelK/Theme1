@@ -1,0 +1,20 @@
+Your command requires Docker Desktop’s Linux engine to be running. 
+When Docker Desktop is closed, still starting, or its WSL backend has stopped, 
+Docker cannot access:
+````
+    \\.\pipe\dockerDesktopLinuxEngine
+
+Before running Compose, you can check it with:
+`````
+    docker info
+
+If it reports the same named-pipe error, start Docker Desktop and wait until it shows that the engine is running. You can also start it from PowerShell:
+
+`````
+    Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+
+    Then verify:
+
+````
+    docker context use desktop-linux
+    docker info 

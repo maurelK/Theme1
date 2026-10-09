@@ -11,9 +11,11 @@ if is_binary(admin_email) and is_binary(admin_password) do
 	case Repo.get_by(User, email: admin_email) do
 		nil ->
 			%User{}
-			|> User.registration_changeset(%{
+			|> User.changeset(%{
 				username: "Administrator",
-				email: admin_email,
+				email: admin_email
+			})
+			|> User.password_changeset(%{
 				password: admin_password
 			})
 			|> Ecto.Changeset.put_change(:role_id, administrator.id)

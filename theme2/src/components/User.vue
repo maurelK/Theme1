@@ -73,8 +73,6 @@
       <template v-else>
         <section class="hero">
           <p class="eyebrow">User Workspace</p>
-          <h1>Make time for<br><em>the right people.</em></h1>
-          <p class="hero-copy">Manage users, clocking, working times, and charts in one unified dashboard.</p>
         </section>
 
         <div class="content-grid">
@@ -172,7 +170,6 @@
             </div>
 
             <div v-else class="empty-state">
-              <div class="empty-orbit"><span></span></div>
               <p class="eyebrow">Your directory awaits</p>
               <h2>Search or select an account<br>to get started.</h2>
               <p class="muted">The person's working times, clock status, and charts will appear here.</p>
