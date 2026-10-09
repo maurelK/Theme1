@@ -1,1 +1,4 @@
 .env
+# Local database dumps
+theme1_dev_backup.sql
+*.sql.dump

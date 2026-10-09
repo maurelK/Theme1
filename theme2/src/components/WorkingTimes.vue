@@ -3,88 +3,89 @@
     <!-- Header Section -->
     <header class="wt-header">
       <div class="wt-title-group">
-        <p class="wt-eyebrow">Utilisateur ID: {{ currentUserId }}</p>
+        <p class="wt-eyebrow">User ID: {{ currentUserId }}</p>
         <h1>Working Times <em>History</em></h1>
       </div>
       <div class="wt-actions">
         <button class="btn-wt btn-outline" @click="getWorkingTimes" :disabled="loading">
-          <span>Actualiser</span>
+          <span>Refresh</span>
         </button>
-        <button type="button" class="btn-wt btn-primary" @click="$emit('go-create-entry')">
-          <span>+ Cr&eacute;er un cr&eacute;neau</span>
+        <button
+          v-if="canManageEntries"
+          type="button"
+          class="btn-wt btn-primary"
+          @click="$emit('go-create-entry')"
+        >
+          <span>+ Create entry</span>
         </button>
       </div>
     </header>
 
     <!-- Date Range Filter Toolbar -->
-    <section class="wt-toolbar" aria-label="Filtrer les temps de travail">
+    <section class="wt-toolbar" aria-label="Filter working times">
       <div class="wt-field">
-        <label for="filter-start">Date de d&eacute;but</label>
-        <input 
-          id="filter-start" 
-          v-model="startDateFilter" 
-          type="datetime-local" 
-          @change="getWorkingTimes"
-        />
+        <label for="filter-start">Start date</label>
+        <input id="filter-start" v-model="startDateFilter" type="datetime-local" @change="getWorkingTimes" />
       </div>
       <div class="wt-field">
-        <label for="filter-end">Date de fin</label>
-        <input 
-          id="filter-end" 
-          v-model="endDateFilter" 
-          type="datetime-local" 
-          @change="getWorkingTimes"
-        />
+        <label for="filter-end">End date</label>
+        <input id="filter-end" v-model="endDateFilter" type="datetime-local" @change="getWorkingTimes" />
       </div>
       <div class="wt-toolbar-actions">
-        <button 
-          v-if="startDateFilter || endDateFilter" 
-          class="btn-wt btn-secondary" 
-          @click="clearFilters"
-        >
-          R&eacute;initialiser
+        <button v-if="startDateFilter || endDateFilter" class="btn-wt btn-secondary" @click="clearFilters">
+          Reset
         </button>
       </div>
     </section>
 
     <!-- Feedback Alerts -->
     <div v-if="error" class="wt-alert wt-alert-error">
-      <span>Erreur : {{ error }}</span>
-      <button class="btn-link" @click="error = ''">Fermer</button>
+      <span>Error: {{ error }}</span>
+      <button class="btn-link" @click="error = ''">Close</button>
     </div>
 
     <div v-if="successMessage" class="wt-alert wt-alert-success">
       <span>{{ successMessage }}</span>
-      <button class="btn-link" @click="successMessage = ''">Fermer</button>
+      <button class="btn-link" @click="successMessage = ''">Close</button>
     </div>
 
     <!-- Summary Stats -->
     <div v-if="!loading && workingTimes.length > 0" class="wt-stats">
       <div class="wt-stat-card">
-        <div class="wt-stat-label">Total Cr&eacute;neaux</div>
+        <div class="wt-stat-label">Total entries</div>
         <div class="wt-stat-value">{{ workingTimes.length }}</div>
       </div>
       <div class="wt-stat-card">
-        <div class="wt-stat-label">Temps Total</div>
+        <div class="wt-stat-label">Total time</div>
         <div class="wt-stat-value">{{ totalHoursFormatted }}</div>
       </div>
       <div class="wt-stat-card">
-        <div class="wt-stat-label">Moyenne / Cr&eacute;neau</div>
+        <div class="wt-stat-label">Average / entry</div>
         <div class="wt-stat-value">{{ avgHoursFormatted }}</div>
+      </div>
+      <div class="wt-stat-card">
+        <div class="wt-stat-label">Overtime</div>
+        <div class="wt-stat-value">{{ totalOvertimeFormatted }}</div>
       </div>
     </div>
 
     <!-- Working Times Table Card -->
     <section class="wt-table-card">
       <div v-if="loading" class="wt-empty-state">
-        <p>Chargement des temps de travail...</p>
+        <p>Loading working times...</p>
       </div>
 
       <div v-else-if="workingTimes.length === 0" class="wt-empty-state">
-        <h3>Aucun temps de travail enregistr&eacute;</h3>
-        <p>Aucun cr&eacute;neau ne correspond aux crit&egrave;res pour cet utilisateur.</p>
-        <button type="button" class="btn-wt btn-primary" style="margin-top: 16px;" @click="$emit('go-create-entry')">
-          Cr&eacute;er un premier cr&eacute;neau
+        <h3>No working times recorded</h3>
+        <p>No entries match the current criteria for this user.</p>
+        <button
+          v-if="canManageEntries"
+          type="button"
+          class="btn-wt btn-primary"
+          style="margin-top: 16px;"
+          @click="$emit('go-create-entry')"
+        >
+          Create first entry
         </button>
       </div>
 
@@ -92,9 +93,11 @@
         <thead>
           <tr>
             <th>ID</th>
-            <th>D&eacute;but (YYYY-MM-DD hh:mm:ss)</th>
-            <th>Fin (YYYY-MM-DD hh:mm:ss)</th>
-            <th>Dur&eacute;e</th>
+            <th>Start (YYYY-MM-DD hh:mm:ss)</th>
+            <th>End (YYYY-MM-DD hh:mm:ss)</th>
+            <th>Duration</th>
+            <th>Overtime</th>
+            <th>Source</th>
             <th style="text-align: right;">Actions</th>
           </tr>
         </thead>
@@ -113,27 +116,39 @@
               <strong>{{ getDuration(wt.start, wt.end) }}</strong>
             </td>
             <td>
+              <span v-if="wt.overtime_minutes > 0" class="wt-overtime-badge">
+                +{{ formatMinutes(wt.overtime_minutes) }}
+              </span>
+              <span v-else class="wt-muted">—</span>
+            </td>
+            <td>
+              <span class="wt-source-badge" :class="`wt-source-${wt.source}`">{{ wt.source }}</span>
+            </td>
+            <td>
               <div class="wt-table-actions">
-                <RouterLink 
-                  :to="`/workingTime/${currentUserId}/${wt.id}`" 
-                  class="btn-wt btn-secondary" 
+                <RouterLink
+                  v-if="canManageEntries"
+                  :to="`/workingTime/${currentUserId}/${wt.id}`"
+                  class="btn-wt btn-secondary"
                   style="padding: 6px 12px; font-size: 11px;"
                 >
-                  &Eacute;diter
+                  Edit
                 </RouterLink>
-                <button 
-                  class="btn-wt btn-danger" 
+                <button
+                  v-if="canRequestCorrection"
+                  class="btn-wt btn-secondary"
+                  style="padding: 6px 12px; font-size: 11px;"
+                  @click="openCorrection(wt)"
+                >
+                  Request correction
+                </button>
+                <button
+                  v-if="canManageEntries"
+                  class="btn-wt btn-danger"
                   style="padding: 6px 12px; font-size: 11px;"
                   @click="deleteWorkingTime(wt.id)"
                 >
-                  Supprimer
-                </button>
-                <button
-                  class="btn-wt btn-secondary"
-                  style="padding: 6px 12px; font-size: 11px;"
-                  @click="requestCorrection(wt.id)"
-                >
-                  Demander une correction
+                  Delete
                 </button>
               </div>
             </td>
@@ -141,16 +156,26 @@
         </tbody>
       </table>
     </section>
+
+    <!-- Correction Request Modal -->
+    <CorrectionRequestModal
+      v-if="correctionTarget"
+      :working-time="correctionTarget"
+      @close="correctionTarget = null"
+      @submitted="onCorrectionSubmitted"
+    />
   </main>
 </template>
 
 <script>
 import "./WorkingTime.css";
-// Route working-time list requests through the shared authenticated API helper.
-import { apiFetch } from "../services/auth";
+import { apiFetch, authState } from "../services/auth";
+import CorrectionRequestModal from "./CorrectionRequestModal.vue";
 
 export default {
   name: "WorkingTimes",
+
+  components: { CorrectionRequestModal },
 
   props: {
     userId: {
@@ -166,7 +191,8 @@ export default {
       error: "",
       successMessage: "",
       startDateFilter: "",
-      endDateFilter: ""
+      endDateFilter: "",
+      correctionTarget: null
     };
   },
 
@@ -176,46 +202,66 @@ export default {
       return this.$route.params.userID || this.$route.params.userid || 1;
     },
 
+    // Only employees request corrections to their own records. Managers and
+    // administrators use the Edit action directly.
+    canRequestCorrection() {
+      return authState.user?.role === "employee";
+    },
+
+    // Manual creation and direct edit/delete are for reviewers only.
+    // Employees get their records from clocking in/out.
+    canManageEntries() {
+      return authState.user?.role !== "employee";
+    },
+
+    totalOvertimeFormatted() {
+      const total = this.workingTimes.reduce(
+        (sum, wt) => sum + (wt.overtime_minutes || 0),
+        0
+      );
+      return this.formatMinutes(total);
+    },
+
     totalHoursFormatted() {
       let totalMinutes = 0;
       for (const wt of this.workingTimes) {
-        const ms = new Date(wt.end.replace(' ', 'T')) - new Date(wt.start.replace(' ', 'T'));
+        const ms = new Date(wt.end.replace(" ", "T")) - new Date(wt.start.replace(" ", "T"));
         if (!isNaN(ms) && ms > 0) {
           totalMinutes += Math.floor(ms / 60000);
         }
       }
       const hrs = Math.floor(totalMinutes / 60);
       const mins = totalMinutes % 60;
-      return `${hrs}h ${mins > 0 ? mins + 'm' : ''}`;
+      return `${hrs}h ${mins > 0 ? mins + "m" : ""}`;
     },
 
     avgHoursFormatted() {
-      if (this.workingTimes.length === 0) return '0h';
+      if (this.workingTimes.length === 0) return "0h";
       let totalMinutes = 0;
       let validCount = 0;
       for (const wt of this.workingTimes) {
-        const ms = new Date(wt.end.replace(' ', 'T')) - new Date(wt.start.replace(' ', 'T'));
+        const ms = new Date(wt.end.replace(" ", "T")) - new Date(wt.start.replace(" ", "T"));
         if (!isNaN(ms) && ms > 0) {
           totalMinutes += Math.floor(ms / 60000);
           validCount++;
         }
       }
-      if (validCount === 0) return '0h';
+      if (validCount === 0) return "0h";
       const avgMins = Math.round(totalMinutes / validCount);
       const hrs = Math.floor(avgMins / 60);
       const mins = avgMins % 60;
-      return `${hrs}h ${mins > 0 ? mins + 'm' : ''}`;
+      return `${hrs}h ${mins > 0 ? mins + "m" : ""}`;
     }
   },
 
   watch: {
-    '$route.params.userID': {
+    "$route.params.userID": {
       immediate: true,
       handler() {
         this.getWorkingTimes();
       }
     },
-    '$route.params.userid': {
+    "$route.params.userid": {
       handler() {
         this.getWorkingTimes();
       }
@@ -228,30 +274,36 @@ export default {
 
   methods: {
     formatDate(dateStr) {
-      if (!dateStr) return '';
-      const formatted = dateStr.replace('T', ' ').substring(0, 19);
-      if (formatted.length === 16) return formatted + ':00';
+      if (!dateStr) return "";
+      const formatted = dateStr.replace("T", " ").substring(0, 19);
+      if (formatted.length === 16) return formatted + ":00";
       return formatted;
     },
 
+    formatMinutes(mins) {
+      if (!mins) return "0m";
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      if (h === 0) return `${m}m`;
+      return `${h}h ${String(m).padStart(2, "0")}m`;
+    },
+
     formatInputToApi(inputVal) {
-      if (!inputVal) return '';
+      if (!inputVal) return "";
       const d = new Date(inputVal);
       if (isNaN(d.getTime())) return inputVal;
-      const pad = (n) => String(n).padStart(2, '0');
+      const pad = (n) => String(n).padStart(2, "0");
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     },
 
     getDuration(startStr, endStr) {
-      if (!startStr || !endStr) return '-';
-      const start = new Date(startStr.replace(' ', 'T'));
-      const end = new Date(endStr.replace(' ', 'T'));
+      if (!startStr || !endStr) return "-";
+      const start = new Date(startStr.replace(" ", "T"));
+      const end = new Date(endStr.replace(" ", "T"));
       const diffMs = end - start;
-      if (isNaN(diffMs) || diffMs < 0) return '-';
+      if (isNaN(diffMs) || diffMs < 0) return "-";
       const mins = Math.floor(diffMs / 60000);
-      const hrs = Math.floor(mins / 60);
-      const remMins = mins % 60;
-      return `${hrs}h ${remMins > 0 ? remMins + 'm' : '00m'}`;
+      return this.formatMinutes(mins);
     },
 
     async getWorkingTimes() {
@@ -276,56 +328,46 @@ export default {
 
         const response = await apiFetch(url);
         if (!response.ok) {
-          throw new Error(`Erreur lors de la r?cup?ration (Status: ${response.status})`);
+          throw new Error(`Failed to fetch (Status: ${response.status})`);
         }
 
         const result = await response.json();
         this.workingTimes = result.data || result || [];
       } catch (err) {
         console.error(err);
-        this.error = err.message || "Impossible de charger les temps de travail.";
+        this.error = err.message || "Unable to load working times.";
       } finally {
         this.loading = false;
       }
     },
 
     async deleteWorkingTime(id) {
-      if (!confirm("Voulez-vous vraiment supprimer ce temps de travail ?")) return;
+      if (!confirm("Delete this working-time entry?")) return;
 
       try {
         const response = await apiFetch(`/api/workingtime/${id}`, {
-          method: 'DELETE'
+          method: "DELETE"
         });
 
         if (!response.ok) {
-          throw new Error(`?chec de la suppression (Status: ${response.status})`);
+          throw new Error(`Delete failed (Status: ${response.status})`);
         }
 
-        this.successMessage = "Cr?neau de travail supprim? avec succ?s.";
-        this.workingTimes = this.workingTimes.filter(wt => wt.id !== id);
+        this.successMessage = "Working-time entry deleted.";
+        this.workingTimes = this.workingTimes.filter((wt) => wt.id !== id);
       } catch (err) {
         console.error(err);
-        this.error = err.message || "Erreur lors de la suppression du cr?neau.";
+        this.error = err.message || "Unable to delete entry.";
       }
     },
 
-    // Submit an employee explanation without mutating the recorded time entry.
-    async requestCorrection(id) {
-      const reason = window.prompt("Pourquoi cette entrée doit-elle être corrigée ?");
-      if (!reason || !reason.trim()) return;
+    openCorrection(wt) {
+      this.correctionTarget = wt;
+    },
 
-      try {
-        const response = await apiFetch(`/api/workingtime/${id}/correction-requests`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reason: reason.trim() })
-        });
-
-        if (!response.ok) throw new Error("Impossible d'envoyer la demande de correction.");
-        this.successMessage = "Demande de correction envoyée.";
-      } catch (err) {
-        this.error = err.message;
-      }
+    onCorrectionSubmitted() {
+      this.correctionTarget = null;
+      this.successMessage = "Correction request submitted.";
     },
 
     clearFilters() {

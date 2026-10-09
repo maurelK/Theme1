@@ -91,6 +91,21 @@ if config_env() == :prod do
     ],
     secret_key_base: secret_key_base
 
+  # Oban in production; inherits the base config but allows queue size overrides.
+  config :theme1, Oban,
+    engine: Oban.Engines.Basic,
+    notifier: Oban.Notifiers.Postgres,
+    queues: [default: 10, auto_close: 5],
+    repo: Theme1.Repo,
+    plugins: [
+      {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
+      {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)},
+      {Oban.Plugins.Cron,
+       crontab: [
+         {"*/15 * * * *", Theme1.Workers.AutoCloseClockSessions}
+       ]}
+    ]
+
   # ## SSL Support
   #
   # To get SSL working, you will need to add the `https` key

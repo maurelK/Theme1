@@ -8,6 +8,13 @@ defmodule Theme1.User do
     field :password_hash, :string
     field :password, :string, virtual: true, redact: true
 
+    # Shift configuration. timezone_offset_minutes is a fixed UTC offset
+    # (e.g. +60 for CET, +120 for CEST). shift_*_minutes are minutes from
+    # local midnight (e.g. 540 = 09:00, 1020 = 17:00).
+    field :timezone_offset_minutes, :integer, default: 0
+    field :shift_start_minutes, :integer
+    field :shift_end_minutes, :integer
+
     has_many :clocks, Theme1.Clock
     has_many :workingtimes, Theme1.WorkingTime
     belongs_to :role, Theme1.Role
@@ -35,13 +42,25 @@ defmodule Theme1.User do
     |> unique_constraint(:email)
   end
 
-  # Registration hashes passwords before persistence and never stores plaintext credentials.
-  def registration_changeset(user, attrs) do
+  # Admin-only: assign timezone and personal shift for a user.
+  def shift_changeset(user, attrs) do
     user
-    |> changeset(attrs)
-    |> cast(attrs, [:password])
-    |> validate_password_strength()
-    |> put_password_hash()
+    |> cast(attrs, [:timezone_offset_minutes, :shift_start_minutes, :shift_end_minutes])
+    |> validate_number(:timezone_offset_minutes, greater_than_or_equal_to: -720, less_than_or_equal_to: 840)
+    |> validate_number(:shift_start_minutes, greater_than_or_equal_to: 0, less_than_or_equal_to: 1439)
+    |> validate_number(:shift_end_minutes, greater_than_or_equal_to: 0, less_than_or_equal_to: 1439)
+    |> validate_shift_order()
+  end
+
+  defp validate_shift_order(changeset) do
+    start_m = get_field(changeset, :shift_start_minutes)
+    end_m = get_field(changeset, :shift_end_minutes)
+
+    if is_integer(start_m) and is_integer(end_m) and end_m <= start_m do
+      add_error(changeset, :shift_end_minutes, "must be after the shift start time")
+    else
+      changeset
+    end
   end
 
   # Password changes reuse the same rules without allowing profile fields through.

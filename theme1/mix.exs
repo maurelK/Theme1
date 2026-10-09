@@ -39,22 +39,23 @@ defmodule Theme1.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:phoenix, "~> 1.8.14"},
-      {:phoenix_ecto, "~> 4.5"},
-      {:ecto_sql, "~> 3.13"},
-      {:postgrex, ">= 0.0.0"},
-      {:phoenix_live_dashboard, "~> 0.8.3"},
+      {:bandit, "~> 1.5"},
+      {:joken, "~> 2.6"},
+      {:pbkdf2_elixir, "~> 2.0"},
       {:swoosh, "~> 1.16"},
-      {:req, "~> 0.5"},
+      {:oban, "~> 2.18"},
+      {:phoenix, "~> 1.8.0"},
+      {:phoenix_ecto, "~> 4.6"},
+      {:ecto_sql, "~> 3.13"},
+      {:postgrex, "~> 0.21"},
+      {:phoenix_live_dashboard, "~> 0.8"},
+      {:phoenix_html, "~> 4.0"},
+      {:phoenix_live_view, "~> 1.0"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
-      {:gettext, "~> 1.0"},
+      {:gettext, "~> 0.26"},
       {:jason, "~> 1.2"},
-      {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"},
-      # Authentication dependencies provide portable password hashing and JWT signing.
-      {:pbkdf2_elixir, "~> 2.2"},
-      {:joken, "~> 2.6"}
+      {:dns_cluster, "~> 0.1.1"}
     ]
   end
 

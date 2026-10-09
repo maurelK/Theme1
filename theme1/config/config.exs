@@ -42,6 +42,29 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Oban runs background jobs (auto-close of forgotten clock sessions).
+config :theme1, Oban,
+  engine: Oban.Engines.Basic,
+  notifier: Oban.Notifiers.Postgres,
+  queues: [default: 10, auto_close: 5],
+  repo: Theme1.Repo,
+  plugins: [
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
+    {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)},
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"*/15 * * * *", Theme1.Workers.AutoCloseClockSessions}
+     ]}
+  ]
+
+# Global fallback shift used when neither the user nor their team has one configured.
+# 540 = 09:00, 1020 = 17:00, tz_offset_minutes = 0 means UTC.
+config :theme1, :default_shift, %{
+  start_minutes: 540,
+  end_minutes: 1020,
+  tz_offset_minutes: 0
+}
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

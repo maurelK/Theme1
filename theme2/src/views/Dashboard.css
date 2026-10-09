@@ -53,6 +53,14 @@
 .dashboard-footer { margin-top: 46px; padding-top: 16px; border-top: 1px solid #d4d6cc; }
 .dashboard-footer a { color: #287c78; font-weight: 700; text-decoration: none; }
 
+/* Shift configuration targets */
+.shift-config-targets {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
 @media (max-width: 760px) {
   .dashboard-hero { padding: 66px 0 42px; }
   .dashboard-note { align-items: flex-start; flex-direction: column; gap: 8px; }
@@ -63,6 +71,12 @@
   .dashboard-password-card, .dashboard-password-form { grid-template-columns: 1fr; }
 }
 
-.dashboard-password-form .password-field {
-  align-self: start;
+@media (max-width: 480px) {
+  .shift-config-targets {
+    flex-direction: column;
+  }
+
+  .shift-config-targets > button {
+    width: 100%;
+  }
 }

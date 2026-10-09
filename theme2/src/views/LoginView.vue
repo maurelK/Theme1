@@ -14,7 +14,7 @@
         </button>
       </form>
       <p class="muted"><RouterLink to="/forgot-password">Forgot password?</RouterLink></p>
-      <p class="muted">Need an account? <RouterLink to="/register">Register</RouterLink></p>
+      <p class="muted">Accounts are created by invitation. Contact your administrator.</p>
     </section>
   </main>
 </template>

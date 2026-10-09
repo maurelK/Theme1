@@ -338,3 +338,37 @@
   font-size: 18px;
   margin-bottom: 8px;
 }
+
+/* Overtime indicator */
+.wt-overtime-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #f2d9c6;
+  color: #8a3a1f;
+  font: 600 11px "DM Mono", monospace;
+  border-radius: 2px;
+}
+
+.wt-muted {
+  color: #b5b8b0;
+  font-size: 11px;
+}
+
+/* Source indicator (clock vs manual) */
+.wt-source-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font: 500 10px "DM Mono", monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.wt-source-clock {
+  background: #d6e6e3;
+  color: #1a5250;
+}
+
+.wt-source-manual {
+  background: #e4e7de;
+  color: #525e55;
+}

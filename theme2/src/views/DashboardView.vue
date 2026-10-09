@@ -152,6 +152,23 @@
           <div class="dashboard-row"><span>Team groups</span><strong>{{ teams.length }} teams</strong></div>
           <div class="dashboard-row"><span>Account changes</span><strong>Traceable</strong></div>
         </article>
+
+        <!-- Shift configuration -->
+        <article class="dashboard-card dashboard-records-card">
+          <h2>Shift configuration</h2>
+          <p>Set the shift for a user or a team. Users inherit from their team, or fall back to the default.</p>
+
+          <div class="shift-config-targets">
+            <button class="dashboard-button" type="button" @click="openUserShiftPicker">
+              Configure a user's shift
+            </button>
+            <button class="dashboard-button" type="button" @click="openTeamShiftPicker">
+              Configure a team's shift
+            </button>
+          </div>
+
+          <p v-if="shiftFeedback" class="dashboard-feedback">{{ shiftFeedback }}</p>
+        </article>
       </section>
 
       <section class="dashboard-password-card">
@@ -178,6 +195,24 @@
         <RouterLink to="/directory">Open directory</RouterLink>
       </footer>
     </main>
+
+    <!-- Target picker -->
+    <ShiftTargetPicker
+      v-if="pickerMode"
+      :mode="pickerMode"
+      :users="users"
+      :teams="teams"
+      @close="onPickerCancelled"
+      @selected="onPickerSelected"
+    />
+
+    <!-- Shift editor -->
+    <ShiftEditorModal
+      v-if="shiftTarget"
+      :target="shiftTarget"
+      @close="shiftTarget = null"
+      @saved="onShiftSaved"
+    />
   </AppLayout>
 </template>
 
@@ -187,6 +222,8 @@ import { useRouter } from "vue-router";
 import { apiFetch, authState, logout } from "../services/auth";
 import AppLayout from "../components/AppLayout.vue";
 import PasswordField from "../components/PasswordField.vue";
+import ShiftEditorModal from "../components/ShiftEditorModal.vue";
+import ShiftTargetPicker from "../components/ShiftTargetPicker.vue";
 import "./Dashboard.css";
 
 // The dashboard reads the server-authorized role and never trusts a client-selected role.
@@ -213,6 +250,9 @@ const currentPassword = ref("");
 const newPassword = ref("");
 const passwordMessage = ref("");
 const correctionRequests = ref([]);
+const shiftTarget = ref(null);
+const shiftFeedback = ref("");
+const pickerMode = ref(null); // null | "user" | "team"
 
 const employeeHours = computed(() => records.value.reduce((total, record) => total + durationHours(record.start, record.end), 0).toFixed(1));
 const employeeProgress = computed(() => Math.min(100, Math.round((Number(employeeHours.value) / 40) * 100)));
@@ -330,6 +370,48 @@ async function reviewCorrection(id, status) {
 async function signOut() {
   await logout();
   await router.push({ name: "Login" });
+}
+
+// --- Shift configuration ---------------------------------------------------
+
+function openUserShiftPicker() {
+  pickerMode.value = "user";
+  shiftFeedback.value = "";
+}
+
+function openTeamShiftPicker() {
+  pickerMode.value = "team";
+  shiftFeedback.value = "";
+}
+
+// Called by the picker when a user/team is chosen.
+function onPickerSelected(item) {
+  if (pickerMode.value === "user") {
+    shiftTarget.value = {
+      type: "user",
+      id: item.id,
+      label: `${item.label} (${item.sub})`
+    };
+  } else {
+    shiftTarget.value = {
+      type: "team",
+      id: item.id,
+      label: item.label
+    };
+  }
+  pickerMode.value = null;
+}
+
+function onPickerCancelled() {
+  pickerMode.value = null;
+}
+
+function onShiftSaved() {
+  shiftTarget.value = null;
+  shiftFeedback.value = "Shift saved.";
+  setTimeout(() => {
+    shiftFeedback.value = "";
+  }, 2500);
 }
 
 function durationHours(start, end) {

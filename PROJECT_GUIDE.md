@@ -11,7 +11,7 @@ Time Manager is a full-stack time-management application with:
 - Travis CI image build and Oracle VM deployment
 - GitHub Actions synchronization from the source repository to the deployment mirror
 
-The current authentication work is developed on:
+Current development branch:
 
 ```text
 feature/authentication
@@ -29,7 +29,8 @@ No secrets should be stored in this document or committed to Git.
 - Ecto and PostgreSQL
 - Joken for JWT signing and verification
 - PBKDF2 for password hashing
-- Swoosh for password-reset email delivery
+- Swoosh for transactional email (invitations, password reset)
+- Oban for background jobs (auto-close of stale clock sessions)
 
 ### Frontend
 
@@ -55,8 +56,8 @@ No secrets should be stored in this document or committed to Git.
 .
 |-- .env.example                 Safe environment-variable template
 |-- .gitignore                   Local files and secrets excluded from Git
-|-- README.md                    Setup, API, authentication, and deployment notes
-|-- PROJECT_GUIDE.md             This project handoff document
+|-- README.md                    Setup and deployment notes
+|-- PROJECT_GUIDE.md             This document
 |-- compose.dev.yaml             Local Docker development stack
 |-- compose.yaml                 Production Docker deployment stack
 |-- caddyfile                    Deployment reverse-proxy configuration
@@ -64,131 +65,181 @@ No secrets should be stored in this document or committed to Git.
 |-- .github/
 |   `-- workflows/
 |       `-- sync_on_theme1.yml   Mirrors source main to deployment repository
-|-- theme1/
-|   |-- mix.exs                  Backend dependencies and Mix aliases
-|   |-- mix.lock                 Locked Elixir dependencies
-|   |-- Dockerfile               Production backend image
-|   |-- Dockerfile.dev           Development backend image
-|   |-- entrypoint.sh            Production migration and Phoenix startup
-|   |-- config/
-|   |   |-- config.exs            Shared configuration
-|   |   |-- dev.exs               Development database and environment config
-|   |   |-- test.exs              Test database and SQL Sandbox config
-|   |   |-- prod.exs               Production compile-time configuration
-|   |   `-- runtime.exs            Runtime secrets and production configuration
+|-- theme1/                      Backend (Elixir / Phoenix)
+|   |-- mix.exs
+|   |-- mix.lock
+|   |-- Dockerfile, Dockerfile.dev, entrypoint.sh
+|   |-- config/                  config.exs, dev.exs, test.exs, prod.exs, runtime.exs
 |   |-- lib/
-|   |   |-- theme1.ex             Application context module
-|   |   |-- theme1/               Domain schemas and authentication context
-|   |   |-- theme1_web.ex          Phoenix web definitions
+|   |   |-- theme1.ex
+|   |   |-- theme1/
+|   |   |   |-- auth.ex                    Authentication and invitation logic
+|   |   |   |-- shifts.ex                  Effective shift resolution
+|   |   |   |-- time_tracking.ex           Clock-in/out and overtime
+|   |   |   |-- scope.ex                   Shared team-scope authorization
+|   |   |   |-- user.ex, role.ex, team.ex, team_membership.ex
+|   |   |   |-- workingtime.ex, clock.ex
+|   |   |   |-- correction_request.ex
+|   |   |   |-- invitation_token.ex, password_reset_token.ex
+|   |   |   `-- workers/auto_close_clock_sessions.ex
 |   |   |-- theme1_web/
-|   |   |   |-- router.ex           Public, authenticated, reviewer, and admin routes
-|   |   |   |-- endpoint.ex          Phoenix endpoint and security headers
-|   |   |   |-- plugs/               JWT, role, and security-header plugs
-|   |   |   |-- controllers/          Auth, role, team, admin, and user controllers
-|   |   |   `-- working_time_controller.ex
-|   |   `-- theme1_web/
-|   |-- priv/
-|   |   |-- repo/migrations/        Database schema migrations
-|   |   |-- repo/seeds.exs          Runtime-driven administrator bootstrap
-|   |   `-- static/                 Phoenix static assets
-|   `-- test/                       ExUnit tests
-|-- theme2/
-|   |-- package.json               Frontend dependencies and scripts
-|   |-- package-lock.json          Locked Node dependencies
-|   |-- Dockerfile                 Production frontend image
-|   |-- nginx.conf                 Production SPA and API reverse proxy
-|   |-- vite.config.js              Development API proxy
+|   |   |   |-- router.ex
+|   |   |   |-- endpoint.ex
+|   |   |   |-- plugs/
+|   |   |   `-- controllers/
+|   |   |       |-- auth_controller.ex
+|   |   |       |-- user_controller.ex
+|   |   |       |-- admin_controller.ex
+|   |   |       |-- clock_controller.ex
+|   |   |       |-- working_time_controller.ex
+|   |   |       |-- correction_request_controller.ex
+|   |   |       |-- role_controller.ex
+|   |   |       `-- team_controller.ex
+|   `-- priv/
+|       |-- repo/migrations/
+|       |-- repo/seeds.exs       Administrator bootstrap
+|       `-- static/
+|-- theme2/                      Frontend (Vue)
+|   |-- package.json, package-lock.json
+|   |-- Dockerfile, nginx.conf, vite.config.js
 |   |-- src/
-|   |   |-- main.js                Vue application entry point
-|   |   |-- App.vue                Router-controlled application shell
-|   |   |-- router/index.js         Routes and authentication guard
-|   |   |-- services/auth.js         Cookie, CSRF, login, reset, and API helper
-|   |   |-- components/              Directory, time, clock, chart, and profile views
-|   |   `-- views/                   Login, registration, recovery, and dashboards
-|   `-- public/                     Public frontend assets
-|-- user.json                      Example API request payload
-|-- update-user.json               Example update payload
-|-- workingtime.json               Example working-time payload
-`-- update-user.json
+|   |   |-- main.js
+|   |   |-- App.vue
+|   |   |-- router/index.js
+|   |   |-- services/auth.js
+|   |   |-- styles/global.css
+|   |   |-- components/
+|   |   |   |-- AppLayout.vue, AppTopbar.vue, AppBottomNav.vue
+|   |   |   |-- PasswordField.vue
+|   |   |   |-- Clock.vue, ClockManager.vue
+|   |   |   |-- WorkingTime.vue, WorkingTimes.vue
+|   |   |   |-- ChartManager.vue, WorkingHours{Bar,Line,Pie}Chart.vue
+|   |   |   |-- CorrectionRequestModal.vue
+|   |   |   |-- ShiftEditorModal.vue, ShiftTargetPicker.vue
+|   |   |   `-- User.vue, User.css
+|   |   `-- views/
+|   |       |-- DashboardView.vue
+|   |       |-- LoginView.vue
+|   |       |-- AcceptInviteView.vue
+|   |       |-- ForgotPasswordView.vue
+|   |       |-- ResetPasswordView.vue
+|   |       `-- RegisterView.vue (deprecated; route redirects to /login)
+|   `-- public/
+|-- user.json, update-user.json, workingtime.json   Example payloads
 ```
 
-Generated dependency directories such as `theme1/deps`, `theme1/_build`, and frontend build output are local build artifacts and are not part of the application design.
+Generated directories (`theme1/deps`, `theme1/_build`, frontend `dist`) are local artifacts and not part of the design.
 
 ## 4. Backend Domain Model
 
 ### Users
 
-Users contain:
-
-- username
-- unique email
-- PBKDF2 password hash
-- role association
+- `username`
+- unique `email`
+- PBKDF2 `password_hash` (nullable until the invitee accepts)
+- `role` association
+- `timezone_offset_minutes` (fixed UTC offset, e.g. `+120` CEST)
+- `shift_start_minutes` / `shift_end_minutes` (minutes from local midnight, e.g. 540 = 09:00)
 - team memberships
-- clocks
-- working-time entries
+- clocks, working-time entries
 
-Plaintext passwords are virtual fields only and are removed after hashing. Password hashes are never returned by API serializers.
+Plaintext passwords are virtual fields only and removed after hashing. Password hashes are never returned by API serializers.
 
 ### Roles
 
-Roles are predefined records:
+Fixed records seeded by migration:
 
 - `employee`
 - `manager`
 - `hr_payroll`
 - `administrator`
 
-There is no public role CRUD. Authenticated users may read the role catalog. Only administrators can promote or demote users.
+There is no public role CRUD. Authenticated users can read the role catalog. Only administrators can promote or demote.
 
 ### Teams
 
-Teams use a many-to-many relationship:
+Many-to-many via `team_memberships`:
 
 ```text
 users <-> team_memberships <-> teams
 ```
 
-A user can belong to multiple teams.
+A user can belong to multiple teams. Teams can carry `timezone_offset_minutes` and shift minutes used as a fallback for their members.
 
 ### Working time
 
-Working-time entries contain:
+A single row per session:
 
-- start datetime
-- end datetime
-- user ID
+- `start` (required)
+- `end` (nullable — an open clock session has no end yet)
+- `user_id`
+- `source` = `"clock"` | `"manual"`
+- `overtime_minutes` (computed on close or manual save)
+- `shift_end_at` (snapshot of the shift end used to compute overtime)
+- `auto_closed` (true if closed by the Oban worker)
+- `needs_review` (true if auto-closed and awaiting manager review)
+
+### Shifts and overtime
+
+- Shift priority (highest first): **user** → **team** → **global default**
+- Global default is `09:00–17:00 UTC`, configurable via `config :theme1, :default_shift`
+- When a user is in multiple teams with shifts, the team with the earliest start time wins
+- Overtime is the overlap between `[shift_end_at, ∞)` and `[start, end)` — i.e. only actual time worked after shift end counts
+- A forgotten clock-out is capped at 12 hours by the auto-close worker, marked `auto_closed = true` and `needs_review = true`
 
 ### Correction requests
 
-Correction requests are separate records connected to a working-time entry. They contain:
+Attached to a working-time entry:
 
-- requester
-- working-time entry
-- reason
-- pending/approved/rejected status
-- reviewer
-- reviewer response
-- timestamps
+- `requester_id`
+- `working_time_id`
+- `reason`
+- `status` = `pending` | `approved` | `rejected`
+- `reviewer_id`
+- `response`
+- `proposed_start` / `proposed_end` (what the requester is asking for, optional)
+
+On approval, the proposed times are applied to the working-time record and overtime is recomputed — all inside one Ecto transaction.
 
 ## 5. Authentication Flow
 
-### Registration
+### Sign-up policy
+
+There is **no public registration**. New users join through an administrator-issued invitation only:
 
 ```text
-Vue registration form
+Admin /directory
     |
     v
-POST /api/auth/register
+POST /api/users  (admin only; role restricted to employee | manager | hr_payroll)
     |
     v
-Password is PBKDF2-hashed
+User created without a password + invitation token stored + email sent
     |
     v
-User receives the employee role
+Invitee clicks /accept-invite?token=...
+    |
+    v
+POST /api/auth/accept-invitation  (single-use, 24h expiry)
+    |
+    v
+Password set; user can now log in
 ```
 
-Public registration cannot assign privileged roles.
+Promotion to `administrator` is a separate, deliberate action via the "Save role" control on the admin dashboard.
+
+### Password rules
+
+Enforced on every path that creates or changes a password (reset, change, accept-invite):
+
+- minimum 10 characters, maximum 72
+- at least one lowercase letter
+- at least one uppercase letter
+- at least one digit
+- at least one symbol
+- not in a small blocklist of common passwords
+
+The frontend `PasswordField.vue` mirrors these rules with a live checklist and strength meter.
 
 ### Login
 
@@ -196,119 +247,131 @@ Public registration cannot assign privileged roles.
 POST /api/auth/login
     |
     v
-Verify email and password
+Verify email + password
     |
     v
 Create random CSRF token
     |
     v
-Create signed Joken JWT containing:
-- user ID
-- role
-- CSRF token
-- expiration
+Sign a Joken JWT containing user_id, role, csrf_token, exp (24h)
     |
     v
-Set JWT in HttpOnly cookie
+Set JWT as HttpOnly cookie "theme1_auth"
     |
     v
-Return safe user profile and CSRF token
+Return safe user profile + CSRF token
 ```
 
-The frontend never reads the JWT. The JWT is stored in the `theme1_auth` HttpOnly cookie.
+The frontend never reads the JWT.
 
 ### Protected requests
 
-For authenticated API calls:
-
 1. Browser sends the HttpOnly cookie automatically.
 2. Frontend sends `X-CSRF-Token`.
-3. Phoenix verifies the JWT signature and expiration.
-4. Phoenix loads the user and role.
-5. Phoenix compares the request CSRF token with the JWT CSRF claim.
-6. Role and ownership checks are applied.
+3. Phoenix verifies JWT signature and expiration, loads the user and role.
+4. Phoenix compares the request CSRF token with the JWT claim.
+5. Role and ownership checks are applied.
+
+GET requests also require the CSRF header in this codebase — the frontend always attaches it.
 
 ### Logout
 
-```text
-POST /api/auth/logout
-```
-
-Logout requires the authenticated cookie and CSRF header, then clears the cookie and frontend session state.
+`POST /api/auth/logout` — requires cookie + CSRF header, clears the cookie.
 
 ### Password change
 
-```text
-POST /api/auth/password
-```
+`POST /api/auth/password` — current password must be valid before a new PBKDF2 hash is stored.
 
-The current password must be valid before a new PBKDF2 hash is stored.
-
-### Forgot-password flow
+### Password reset (forgot password)
 
 ```text
 POST /api/auth/password-reset/request
     |
     v
-Generic response regardless of account existence
+Generic response regardless of whether the account exists
     |
     v
-Create hashed, expiring, single-use token
+Store SHA-256 digest of a single-use token (1h expiry)
     |
     v
-Send reset link through Swoosh SMTP in production
+Send link via Swoosh
     |
     v
 POST /api/auth/password-reset/confirm
 ```
 
-Reset tokens:
+### Session bootstrap
 
-- expire after one hour
-- are stored as SHA-256 digests
-- are invalidated after first use
-- are not exposed in production responses
-- may be returned for local development testing only
+`GET /api/auth/csrf` returns:
+
+- `{csrf_token: "<token>"}` when a valid session cookie is present
+- `{csrf_token: null}` for anonymous visitors (200, not 401)
+
+This lets the frontend bootstrap without spurious console errors on public pages.
 
 ## 6. Authorization Model
 
+### Global permission matrix
+
+| Capability | employee | manager | hr_payroll | administrator |
+|---|---|---|---|---|
+| View own profile | ✅ | ✅ | ✅ | ✅ |
+| View other users | ❌ | team only | ✅ | ✅ |
+| Edit own profile | ✅ | ✅ | ✅ | ✅ |
+| Clock in / out (self) | ✅ | ✅ | ✅ | ✅ |
+| Clock in / out (others) | ❌ | team only | ✅ | ✅ |
+| View own working times | ✅ | ✅ | ✅ | ✅ |
+| View others' working times | ❌ | team only | ✅ | ✅ |
+| Create manual WT | ❌ | team + self | ✅ | ✅ |
+| Edit / delete WT | ❌ | team + self | ✅ | ✅ |
+| Request correction | own WT | ❌ | ❌ | ❌ |
+| Review correction requests | ❌ | team only | ✅ | ✅ |
+| Invite new users | ❌ | ❌ | ❌ | ✅ |
+| Promote / demote users | ❌ | ❌ | ❌ | ✅ |
+| Create teams | ❌ | ❌ | ❌ | ✅ |
+| Add / remove team members | ❌ | ❌ | ❌ | ✅ |
+| Configure user shift | ❌ | ❌ | ❌ | ✅ |
+| Configure team shift | ❌ | ❌ | ❌ | ✅ |
+
 ### Employee
 
-- Access own profile
-- Access own clocks and working times
-- Create correction requests for own records
+- Access own profile, clocks, working times
+- Clock in / out for themselves
+- Submit correction requests on own records
 - Change own password
 - Cannot enumerate other users
-- Cannot manage roles or teams
+- Cannot create, edit, or delete working-time records directly
+- Cannot manage roles, teams, or shifts
 
 ### Manager
 
-- Access assigned team information
-- Review correction requests
+- Clock in / out for themselves
+- Manage working times and clock for team members and themselves
+- Review correction requests from their team
 - View team snapshots
-- Work with team-scoped records
+- **Cannot** manage users, roles, teams, shifts, or review requests outside their team
 
-### HR/Payroll
+### HR / Payroll
 
-- Read approved report scopes
-- Review time and payroll categories
+- Read working times and clock data across the org
+- Create and edit working-time records
 - Review correction requests
+- Oversee payroll categories
+- Cannot manage users, roles, teams, or shifts
 
 ### Administrator
 
-- Access all users
-- Promote and demote users
-- Create teams
-- Add and remove team members
-- Manage system-level controls
-- Review correction requests
+- Full access: users, roles, teams, shifts
+- Invite new users (role restricted to employee / manager / hr_payroll)
+- Promote / demote via the "Save role" control
+- Configure user and team shifts
+- Review all correction requests
 
 ## 7. Main API Routes
 
 ### Authentication
 
 ```text
-POST /api/auth/register
 POST /api/auth/login
 POST /api/auth/logout
 GET  /api/auth/csrf
@@ -316,19 +379,20 @@ GET  /api/auth/session
 POST /api/auth/password
 POST /api/auth/password-reset/request
 POST /api/auth/password-reset/confirm
+POST /api/auth/accept-invitation
 ```
+
+Public registration (`POST /api/auth/register`) has been removed.
 
 ### Users
 
 ```text
 GET    /api/users
-POST   /api/users
+POST   /api/users                 (admin only; sends an invitation)
 GET    /api/users/:userID
 PUT    /api/users/:userID
 DELETE /api/users/:userID
 ```
-
-User access is filtered by role and ownership.
 
 ### Roles and teams
 
@@ -336,29 +400,34 @@ User access is filtered by role and ownership.
 GET    /api/roles
 GET    /api/teams
 PUT    /api/admin/users/:userID/role
+GET    /api/admin/users/:userID/shift
+PUT    /api/admin/users/:userID/shift
 POST   /api/admin/teams
 POST   /api/admin/teams/:teamID/members/:userID
 DELETE /api/admin/teams/:teamID/members/:userID
+GET    /api/admin/teams/:teamID/shift
+PUT    /api/admin/teams/:teamID/shift
 ```
 
 ### Working time and correction review
 
 ```text
 GET    /api/workingtime/:userID
-POST   /api/workingtime/:userID
+POST   /api/workingtime/:userID           (manager+, scope-checked)
 GET    /api/workingtime/:userID/:id
-PUT    /api/workingtime/:id
-DELETE /api/workingtime/:id
+PUT    /api/workingtime/:id               (manager+, scope-checked)
+DELETE /api/workingtime/:id               (manager+, scope-checked)
 POST   /api/workingtime/:id/correction-requests
-GET    /api/reviews/correction-requests
+GET    /api/reviews/correction-requests   (scoped by role)
 PUT    /api/reviews/correction-requests/:id
 ```
 
 ### Clocks
 
 ```text
-GET  /api/clocks/:userID
-POST /api/clocks/:userID
+POST /api/clocks/:userID/in
+POST /api/clocks/:userID/out
+GET  /api/clocks/:userID/status
 ```
 
 ## 8. Frontend Routes and Views
@@ -366,46 +435,42 @@ POST /api/clocks/:userID
 ```text
 /                         Role-aware dashboard
 /login                    Login form
-/register                 Employee registration form
-/forgot-password          Password-reset request form
-/reset-password           Password-reset confirmation form
-/directory                Existing user/profile directory
+/accept-invite            Set password after invitation
+/forgot-password          Password-reset request
+/reset-password           Password-reset confirmation
+/directory                Profile (employee) or directory (manager/hr/admin)
 /workingTimes/:userID     Working-time history
-/workingTime/:userID      Create working-time entry
-/workingTime/:userID/:id  Edit working-time entry
+/workingTime/:userID      Create working-time entry (manager+)
+/workingTime/:userID/:id  Edit working-time entry (manager+)
 /clock/:userID            Clock manager
 /chartManager/:userID     Working-time charts
+/register                 Redirects to /login (registration is closed)
 ```
 
-The router uses `beforeEach()` to:
+The router's `beforeEach()`:
 
-- restore the cookie session
-- redirect unauthenticated users to login
-- prevent authenticated users from returning to guest pages
-- protect direct/deep links
+- restores the cookie session
+- redirects unauthenticated users to `/login`
+- prevents authenticated users from returning to guest-only pages
+- protects direct/deep links
 
-### Production sign-in and role selection
+### Role-aware navigation
 
-There is one shared sign-in page:
+- Top bar label for `/`: **Overview** for employee/manager/hr_payroll, **Workspace** for administrator
+- Top bar label for `/directory`: **Profile** for employees, **Directory** for others
+- Bottom nav (mobile) mirrors the same labels plus **Sign out**
 
-```text
-https://your-public-domain.example/login
-```
+### Employee profile path
 
-Users must not choose a role on the login form. The backend determines the role from the authenticated database record and the frontend displays the matching dashboard:
+Employees hitting `/directory` see their own profile only — no search, no user list, no invite panel, no manual entry, no edit/delete actions.
 
-```text
-employee       -> Employee dashboard
-manager        -> Manager dashboard
-hr_payroll     -> HR/payroll dashboard
-administrator  -> Administrator dashboard
-```
+### Mobile layout
 
-This prevents a user from claiming a privileged role through client-side input.
+- Bottom tab bar replaces the desktop inline nav below 900px
+- Tab strip inside a workspace scrolls horizontally on narrow screens
+- Dashboard/Charts tab is hidden below 900px
 
 ## 9. Local Development
-
-From the repository root:
 
 ```powershell
 docker compose -f compose.dev.yaml up --build -d
@@ -417,9 +482,10 @@ Services:
 Frontend: http://localhost:5173
 Backend:  http://localhost:4001
 Database: localhost:5433
+Dev mailbox: http://localhost:4001/dev/mailbox
 ```
 
-View logs:
+Logs:
 
 ```powershell
 docker compose -f compose.dev.yaml logs -f backend
@@ -430,23 +496,21 @@ docker compose -f compose.dev.yaml logs -f db
 After backend changes:
 
 ```powershell
-docker compose -f compose.dev.yaml up -d --no-deps --build backend
-docker compose -f compose.dev.yaml exec backend mix compile
+docker compose -f compose.dev.yaml exec backend mix compile --warnings-as-errors
 ```
 
-After frontend changes:
+Config changes require a restart:
 
 ```powershell
-docker compose -f compose.dev.yaml up -d --no-deps --build frontend
-Set-Location theme2
-npm run build
-Set-Location ..
+docker compose -f compose.dev.yaml restart backend
 ```
+
+After frontend changes: Vite HMR reloads automatically.
 
 Run backend tests:
 
 ```powershell
-docker exec -e MIX_ENV=test theme1-dev-backend-1 mix test
+docker compose -f compose.dev.yaml exec -e MIX_ENV=test backend mix test
 ```
 
 Stop without deleting the database:
@@ -468,19 +532,21 @@ docker compose -f compose.dev.yaml up --build -d
 
 Use `.env.example` as the safe template. Never commit `.env`.
 
-Important values:
-
 ```env
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=replace-with-a-strong-local-password
 POSTGRES_DB=theme1_dev
 SECRET_KEY_BASE=replace-with-a-generated-secret
 AUTH_JWT_SECRET=replace-with-a-strong-jwt-secret
+PUBLIC_APP_URL=http://localhost:5173
+MAILER_FROM=no-reply@timemanager.local
 ```
+
+`.env` is loaded into the backend container via `env_file` in `compose.dev.yaml`.
 
 ### Production Oracle VM
 
-The production VM must provide:
+Required values on the VM:
 
 ```env
 POSTGRES_USER=...
@@ -497,100 +563,58 @@ SMTP_PASSWORD=...
 SMTP_SSL=true
 ```
 
-These values must remain on the VM or in the deployment secret store. They must not be committed to Git or baked into Docker images.
+Optionally:
 
-### How to create or obtain production values
+```env
+COOKIE_SECURE=true
+```
 
-`SECRET_KEY_BASE` is a Phoenix secret. Generate it from the backend project:
+Set `COOKIE_SECURE=true` **only** once HTTPS is live. With plain HTTP, leaving it unset (so cookies are non-secure) is required for login and invite acceptance to work.
+
+### How to create production values
+
+`SECRET_KEY_BASE`:
 
 ```bash
 cd ~/Theme1
 docker compose run --rm backend mix phx.gen.secret
 ```
 
-Use the output as `SECRET_KEY_BASE`.
-
-`AUTH_JWT_SECRET` must be a different long random secret. Generate one with:
+`AUTH_JWT_SECRET` (must differ from `SECRET_KEY_BASE`):
 
 ```bash
 openssl rand -base64 48
 ```
 
-`POSTGRES_PASSWORD` should also be generated with a password manager or:
+`POSTGRES_PASSWORD`:
 
 ```bash
 openssl rand -base64 32
 ```
 
-`POSTGRES_USER` and `POSTGRES_DB` are deployment choices, for example:
-
-```env
-POSTGRES_USER=theme1
-POSTGRES_DB=theme1_prod
-```
-
-`PUBLIC_APP_URL` is the public frontend address used in password-reset links. For the current IP-only deployment:
-
-```env
-PUBLIC_APP_URL=http://145.241.169.233:8080
-```
-
-If `PUBLIC_APP_URL` is omitted, the backend falls back to `http://PHX_HOST:8080`. The application will start, but explicitly setting the variable is recommended. Change it if the frontend port or public access path changes.
-
-`MAILER_FROM` is a verified sender address supplied by your email provider. It is not generated:
-
-```env
-MAILER_FROM=no-reply@your-verified-mail-domain.example
-```
-
-`SMTP_RELAY` is the SMTP hostname supplied by the provider, such as `smtp.sendgrid.net` or another provider-specific relay.
-
-`SMTP_PORT` and `SMTP_SSL` normally use:
-
-```env
-SMTP_PORT=587
-SMTP_SSL=true
-```
-
-`SMTP_USERNAME` comes from the provider. Some providers use a literal username such as `apikey`; others use a service account or email address.
-
-`SMTP_PASSWORD` is the provider-generated SMTP credential, API key, or app password. It is not necessarily the normal account password. Create it in the provider dashboard and store it only on the VM or in a secret manager.
-
-Example IP-only production configuration:
-
-```env
-POSTGRES_USER=theme1
-POSTGRES_PASSWORD=replace-with-generated-db-password
-POSTGRES_DB=theme1_prod
-SECRET_KEY_BASE=replace-with-mix-phx-gen-secret-output
-AUTH_JWT_SECRET=replace-with-separate-random-jwt-secret
-PUBLIC_APP_URL=http://145.241.169.233:8080
-MAILER_FROM=no-reply@verified-sender.example
-SMTP_RELAY=smtp.example.com
-SMTP_PORT=587
-SMTP_USERNAME=provider-smtp-username
-SMTP_PASSWORD=provider-generated-smtp-secret
-SMTP_SSL=true
-```
+`SMTP_PASSWORD` is the provider-generated SMTP credential (for Gmail, a 16-character App Password without spaces).
 
 ## 11. Security and CORS
 
-The frontend and API use the same origin in production through Nginx:
-
-```text
-Browser -> Nginx frontend -> /api -> Phoenix backend
-```
+Production: browser → Nginx frontend → `/api` → Phoenix backend, same origin.
 
 Therefore:
 
-- no wildcard CORS policy is enabled
-- the JWT cookie remains same-origin
+- no wildcard CORS policy
+- the JWT cookie stays same-origin
 - CSRF is enforced with the request header
 - security headers are added by Phoenix
-- production cookies use `Secure`
-- production must run behind HTTPS
+- production cookies use `Secure` **only when `COOKIE_SECURE=true`** (see §10)
 
-If the frontend and API are separated onto different origins later, add an explicit allowlist rather than `*` and review cookie `SameSite` behavior.
+If the frontend and API are separated later, add an explicit allowlist rather than `*`.
+
+### Known issues to address before public release
+
+- Backend currently published on Oracle at port `4000` — restrict or bind behind the proxy
+- Production HTTPS not yet enabled
+- JWT revocation / rotation strategy not implemented
+- Login rate limiting not implemented
+- `mint` dependency has open CVE advisories (transitive; bump when patched)
 
 ## 12. Docker Deployment Images
 
@@ -601,14 +625,9 @@ theme1/Dockerfile
 theme2/Dockerfile
 ```
 
-The backend production entrypoint runs:
+Backend entrypoint runs `mix ecto.migrate` then `mix phx.server`.
 
-```bash
-mix ecto.migrate
-mix phx.server
-```
-
-Images are published as:
+Published as:
 
 ```text
 maurelk/time-manager-backend:latest
@@ -619,7 +638,7 @@ maurelk/time-manager-frontend:latest
 
 ### Source-to-mirror flow
 
-`.github/workflows/sync_on_theme1.yml` runs when `main` receives a push and mirrors it to:
+`.github/workflows/sync_on_theme1.yml` mirrors `main` to:
 
 ```text
 git@github.com:maurelK/Theme1.git
@@ -631,23 +650,15 @@ The source repository remains the source of truth.
 
 `.travis.yml` runs on `main` only.
 
-Stage 1:
-
-1. Start Docker Buildx.
-2. Login to Docker Hub using Travis variables.
-3. Build multi-platform backend image.
-4. Push backend image.
-5. Build multi-platform frontend image.
-6. Push frontend image.
+Stage 1: build and push backend and frontend images to Docker Hub.
 
 Stage 2:
 
 1. Decode `ORACLE_SSH_KEY_B64`.
-2. Scan and register the Oracle host key.
+2. Register the Oracle host key.
 3. Copy `compose.yaml` to `~/Theme1/compose.yaml`.
 4. SSH to Oracle.
-5. Run `docker compose pull`.
-6. Run `docker compose up -d`.
+5. `docker compose pull && docker compose up -d`.
 
 Required Travis variables:
 
@@ -659,29 +670,15 @@ ORACLE_HOST
 ORACLE_USER
 ```
 
-Required Oracle environment variables are listed in the production section above.
-
 ### Production frontend access
-
-With the current [compose.yaml](compose.yaml), the frontend is published on port `8080`:
 
 ```text
 http://145.241.169.233:8080/login
 ```
 
-The frontend Nginx container proxies `/api` to the backend service internally. Users should access the frontend URL rather than calling Phoenix directly. The backend is currently published on port `4000`; restrict that port with the Oracle firewall or bind it behind the reverse proxy before a public release.
-
-For the current IP-only deployment, use:
-
-```env
-PUBLIC_APP_URL=http://145.241.169.233:8080
-```
-
-If `PUBLIC_APP_URL` is omitted, the backend falls back to `http://PHX_HOST:8080`. It will not prevent startup, but an explicit value is recommended because password-reset emails must link to the real public frontend. A future HTTPS domain should replace this value.
+The frontend Nginx container proxies `/api` internally to the backend.
 
 ### Bootstrap the first administrator
-
-SSH into the Oracle VM after the production containers are running:
 
 ```bash
 ssh ORACLE_USER@ORACLE_HOST
@@ -692,75 +689,202 @@ docker compose exec \
     backend mix run priv/repo/seeds.exs
 ```
 
-The seed is idempotent. It creates the account if it does not exist or promotes the existing account to `administrator`. Do not put the real password in Git, shell history, or this document.
+The seed is idempotent.
 
-### Configure manager, HR/payroll, and administrator access
+### Grant elevated roles
 
-1. Open the production frontend login page.
-2. Sign in with the bootstrapped administrator account.
-3. Open the administrator dashboard.
-4. Select a user in the administrator controls.
-5. Select one of the predefined roles:
-     - `manager`
-     - `hr_payroll`
-     - `administrator`
-6. Save the role.
+1. Sign in as the bootstrapped administrator.
+2. Open the administrator dashboard.
+3. Under "Administrator controls", select a user and a role.
+4. Save — the user signs out and back in to pick up the new role.
 
-The user then signs out and signs in again. The backend returns the new role during login/session restoration, and the frontend opens the corresponding dashboard automatically.
+There are no per-role sign-in buttons; role is always derived server-side.
 
-Administrator responsibilities:
+## 14. Testing Guide
 
-- promote and demote users
-- create teams
-- manage team memberships
-- review correction requests
-- manage system-level access
+### 14.1 Prerequisites
 
-Manager responsibilities:
+- Local stack up: `docker compose -f compose.dev.yaml up -d`
+- Backend compiled clean: `docker compose -f compose.dev.yaml exec backend mix compile --warnings-as-errors`
+- One admin: seed it if missing
+- For scope tests, run the scope seed (see §14.6)
 
-- review assigned team records
-- inspect correction requests
-- monitor team snapshots and exceptions
-- work only within the manager’s assigned team scope
+```powershell
+docker compose -f compose.dev.yaml run --rm -e ADMIN_EMAIL=admin@example.com -e ADMIN_PASSWORD='ChangeMe-Str0ng!' -e PHX_SERVER=false backend mix run priv/repo/seeds.exs
+```
 
-HR/payroll responsibilities:
+### 14.2 Test roles and accounts
 
-- review approved time records
-- review time and payroll categories
-- access reporting scopes allowed by policy
-- review correction requests
+| Role | How to create | Example |
+|---|---|---|
+| administrator | Seeded | `admin@example.com` / `ChangeMe-Str0ng!` |
+| manager | Admin invites from `/directory` | `manager@example.com` |
+| hr_payroll | Admin invites | `hr@example.com` |
+| employee | Admin invites | `employee@example.com` |
 
-Employee responsibilities:
+Invited users set their password via the dev mailbox link: **http://localhost:4001/dev/mailbox**.
 
-- manage their own working time
-- view their own records
-- submit correction requests
-- change their own password
+### 14.3 Authentication tests
 
-There are no separate “sign in as manager” or “sign in as administrator” buttons. Role selection is always performed by the backend after credential verification.
+| # | Step | Expected |
+|---|---|---|
+| A1 | Visit `/register` | Redirects to `/login` |
+| A2 | `POST /api/auth/register` with any body | `404` |
+| A3 | Log in with wrong password | `401`, "Invalid email or password" |
+| A4 | Log in with correct credentials | Redirects to role-appropriate dashboard |
+| A5 | Refresh the page | Session restored, still on the same page |
+| A6 | Attempt a protected API without CSRF header | `401` |
+| A7 | Sign out | Cookie cleared, redirected to `/login` |
+| A8 | Change password → log out → log back in with new password | Works |
 
-## 14. Release Preparation Checklist
+### 14.4 Invitation flow tests
 
-Before committing:
+| # | Step | Expected |
+|---|---|---|
+| B1 | As admin, open `/directory` → "Invite someone" | Form with name, email, role (employee/manager/hr_payroll only) |
+| B2 | Submit invite with role `administrator` via curl | `403` "This role cannot be assigned at invite time" |
+| B3 | Submit a valid invite | Green "Invite sent to…" message |
+| B4 | Open http://localhost:4001/dev/mailbox | Email from `no-reply@timemanager.local`, subject "You're invited to Time Manager" |
+| B5 | Open the invite link | `/accept-invite` with prefilled token and password field showing the rule checklist |
+| B6 | Try a weak password | Checklist shows unmet rules |
+| B7 | Submit a strong password | Redirected to `/login` |
+| B8 | Log in as the invited user | Dashboard matches the role they were invited with |
+| B9 | Reuse the same invite link | `422` "Invalid or expired invitation token" |
+| B10 | Check `invitation_tokens` table | `used_at` is set |
 
-- [ ] Remove temporary local validation users, teams, and correction records.
+### 14.5 Password rules tests
+
+| # | Step | Expected |
+|---|---|---|
+| C1 | Register a user with password `short` | `422` with all unmet rules |
+| C2 | Password `MySecret!234` | Accepted |
+| C3 | Password `password` | Rejected by blocklist |
+| C4 | Password exactly 72 chars | Accepted |
+| C5 | Password 73+ chars | Rejected |
+
+### 14.6 Clock and overtime tests
+
+Prepare test data:
+
+1. As admin, invite a manager (`manager1@example.com`), an employee (`emp1@example.com`), and another employee (`emp2@example.com`).
+2. Create a team "Team A".
+3. Add the manager and `emp1` to Team A. Leave `emp2` out.
+4. Optionally set a team shift on Team A via the dashboard: 08:00–16:00 UTC.
+5. Optionally set a personal shift on `emp1` via the dashboard: 09:00–17:00 UTC+01:00.
+
+| # | Actor | Action | Expected |
+|---|---|---|---|
+| D1 | emp1 | Open `/directory` → Clock Manager tab | Shows "Not clocked in" and the effective shift line |
+| D2 | emp1 | Click Clock In | Status flips to "Clocked in since HH:MM", button becomes Clock Out |
+| D3 | emp1 | Click Clock Out | Status flips back; a working-time record is created with `source: "clock"` |
+| D4 | emp1 | Open Working Times | The new record appears with its duration and any overtime |
+| D5 | manager1 | Open Team A → select emp1 → Clock Manager | Can clock emp1 in/out |
+| D6 | manager1 | Select emp2 → Clock Manager | emp2 is not in Team A, so scope applies: the manager gets `403` on clock actions |
+| D7 | administrator | Select any user → Clock Manager | Works |
+| D8 | emp1 | POST /api/workingtime/... (create) via curl | `403` "Employees cannot modify working times directly" |
+
+Overtime verification: create a WT record for `emp1` with `start` before shift end and `end` after shift end (using the DB seed script pattern) and confirm `overtime_minutes` on the resulting record equals the difference.
+
+Auto-close: insert a WT with `start = now - 13h` and `end = nil`, then run the worker manually:
+
+```powershell
+docker compose -f compose.dev.yaml exec backend mix run -e "Theme1.Workers.AutoCloseClockSessions.perform(%Oban.Job{})"
+```
+
+Expect the record to have `auto_closed: true`, `needs_review: true`, and a capped 12h duration.
+
+### 14.7 Shift configuration tests
+
+| # | Actor | Action | Expected |
+|---|---|---|---|
+| E1 | admin | Dashboard → "Configure a user's shift" | Opens the target picker |
+| E2 | admin | Search "emp1", select | Opens the shift editor |
+| E3 | admin | Set 09:00–17:00, UTC+01:00, Save | Green "Shift saved." |
+| E4 | any | As emp1, open Clock Manager | Shift line shows `09:00–17:00 (UTC+01:00) · user` |
+| E5 | admin | Clear emp1's shift | Shift line shows the team shift or `default` |
+| E6 | admin | Set team shift 08:00–16:00 UTC | Any member without a personal shift shows `08:00–16:00 (UTC) · team` |
+| E7 | manager/hr | Attempt to open shift editor via direct API `PUT /api/admin/users/:id/shift` | `403` |
+
+### 14.8 Correction request tests
+
+| # | Actor | Action | Expected |
+|---|---|---|---|
+| F1 | emp1 | Working Times tab → "Request correction" on own record | Modal opens with current start/end, reason textarea, optional proposed start/end |
+| F2 | emp1 | Submit with reason only | `201`, green "Correction request submitted." |
+| F3 | emp1 | Submit with reason + proposed times | `201` |
+| F4 | manager1 | Dashboard → correction list | Request from emp1 visible (team scope) |
+| F5 | manager1 | Approve | The underlying working-time record's start/end update to the proposed values; overtime recomputed; request marked approved |
+| F6 | manager1 | Reject another request | Status becomes `rejected`, working-time unchanged |
+| F7 | manager1 | Submit a correction request | "Request correction" button is not shown to managers |
+| F8 | manager1 | Try to review a request from a non-team user via direct API | `404` (leak prevention) |
+| F9 | admin | Review | Works on all requests |
+
+### 14.9 Scope enforcement tests
+
+| # | Actor | Action | Expected |
+|---|---|---|---|
+| G1 | manager (Team A) | Create WT for team member | `201` |
+| G2 | manager (Team A) | Create WT for a non-member | `403` "You cannot create records for this user" |
+| G3 | manager (Team A) | Create WT for themselves | `201` |
+| G4 | manager (Team A) | Update a non-member's WT (valid id) | `404` |
+| G5 | manager (Team A) | Delete a non-member's WT | `404` |
+| G6 | manager (Team A) | Update own WT | `200` |
+| G7 | hr_payroll | Create WT for anyone | `201` |
+| G8 | administrator | Create WT for anyone | `201` |
+| G9 | employee | Create, update, delete via direct API | `403` |
+
+### 14.10 Role-aware UI tests
+
+| # | Actor | Observe | Expected |
+|---|---|---|---|
+| H1 | employee | Top nav | Overview + Profile only |
+| H2 | employee | Directory page | Own profile only; no search; no invite panel; no Create entry; no Edit/Delete |
+| H3 | employee | Working Times | Can request corrections; no create/edit/delete actions |
+| H4 | manager | Top nav | Overview + Directory |
+| H5 | manager | Directory page | Search, recent accounts, working time controls, no invite panel |
+| H6 | hr_payroll | Top nav | Overview + Directory |
+| H7 | administrator | Top nav | Workspace + Directory; invite panel visible |
+| H8 | any | Resize to mobile (< 900px) | Bottom tab bar appears; Dashboard tab hidden inside the workspace |
+| H9 | any | Tab strip at mobile width | Single horizontal-scrolling row |
+
+### 14.11 Backend test suite
+
+```powershell
+docker compose -f compose.dev.yaml exec -e MIX_ENV=test backend mix test
+```
+
+Expected: all tests pass. Currently covers auth (password rules, reset tokens single-use) and integration smoke tests.
+
+### 14.12 Strict compilation and frontend build
+
+```powershell
+docker compose -f compose.dev.yaml exec backend mix compile --warnings-as-errors
+docker compose -f compose.dev.yaml exec backend mix format --check-formatted
+Set-Location theme2
+npm run build
+Set-Location ..
+```
+
+All three must succeed with no warnings.
+
+## 15. Release Preparation Checklist
+
+- [ ] Remove local test users, teams, correction records, and stale clock sessions.
 - [ ] Confirm `.env` is ignored and no secrets are staged.
-- [ ] Confirm Oracle has `AUTH_JWT_SECRET`.
-- [ ] Confirm Oracle has SMTP configuration.
-- [ ] Confirm `PUBLIC_APP_URL` points to the public frontend URL (`http://145.241.169.233:8080` until HTTPS/domain are configured).
-- [ ] Confirm production reset emails can be delivered.
+- [ ] Confirm Oracle has `AUTH_JWT_SECRET` set to a value different from `SECRET_KEY_BASE`.
+- [ ] Confirm Oracle has full SMTP configuration (`SMTP_RELAY`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_SSL`, `MAILER_FROM`).
+- [ ] Confirm `SMTP_PASSWORD` has no whitespace (App Passwords are 16 chars without spaces).
+- [ ] Confirm `PUBLIC_APP_URL` points to the public frontend (`http://145.241.169.233:8080`).
+- [ ] Confirm `COOKIE_SECURE` is unset while on HTTP, or `true` once HTTPS is live.
 - [ ] Confirm database backups exist.
 - [ ] Confirm rollback image/version procedure.
-- [ ] Run backend tests.
-- [ ] Run backend strict compilation.
-- [ ] Run frontend build.
-- [ ] Validate Docker Compose files.
-- [ ] Review `git diff` and `git diff --check`.
+- [ ] Restrict or proxy the exposed backend port (currently `4000` on the VM).
+- [ ] Run backend tests, strict compile, and frontend build.
 
 Commands:
 
 ```powershell
-docker exec -e MIX_ENV=test theme1-dev-backend-1 mix test
+docker compose -f compose.dev.yaml exec -e MIX_ENV=test backend mix test
 docker compose -f compose.dev.yaml exec backend mix compile --warnings-as-errors
 Set-Location theme2
 npm run build
@@ -770,42 +894,35 @@ docker compose config -q
 git diff --check
 ```
 
-## 15. Remaining Work
+## 16. Remaining Work
 
-The core authentication and role-management implementation is complete. Remaining product and hardening work includes:
+- Persistent audit log for every role / team / shift / review action
+- Login rate limiting and account abuse protection
+- JWT revocation / rotation strategy
+- HTTPS on Oracle with `COOKIE_SECURE=true` and HSTS
+- Restrict or hide the exposed backend port behind the reverse proxy
+- Payroll report generation and export
+- Bump `mint` to a patched version (transitive dep with open CVE advisories)
+- Broader browser / E2E coverage (Playwright or similar)
+- Visual polish against Figma frames
+- Richer admin UI: replace the interim target pickers with a unified admin console
 
-- persistent audit-log records for every role/team/review action
-- stronger manager team-scope filtering on review requests
-- applying approved corrections to working-time values
-- full HR/payroll report generation and export
-- login rate limiting and account abuse protection
-- JWT revocation/rotation strategy
-- security-header and production HTTPS verification on Oracle
-- broader browser/end-to-end coverage
-- final visual polish against every Figma dashboard frame
-
-These items should be completed or explicitly accepted as follow-up scope before production release, depending on the release requirements.
-
-## 16. Current Validation Status
+## 17. Current Validation Status
 
 Validated locally:
 
-- login and registration
-- HttpOnly JWT cookie flow
-- CSRF-protected requests
-- logout
-- password change
-- password reset
-- role promotion/demotion
-- team creation and membership lifecycle
-- correction request submission
-- correction review
-- employee ownership filtering
-- security headers
-- frontend production build
-- backend compilation
-- backend tests
-- Docker Compose configuration
+- Login and session bootstrap (including `/api/auth/csrf` returning `null` for anonymous visitors)
+- Invitation flow end-to-end (invite → mailbox → accept → login)
+- Password rules enforced on register / reset / change / accept-invite
+- Clock in / clock out with shift-aware overtime
+- Auto-close worker (Oban cron, 15-min interval)
+- Correction requests with proposed times, applied on approval in one transaction
+- Shift configuration for users and teams via admin dashboard
+- Manager team-scope enforcement on create, update, delete, and review
+- Employee lockout from manual create/update/delete
+- Role-aware UI (labels, tabs, buttons) for all four roles
+- Mobile layout: bottom tab bar, horizontal-scrolling tab strip, hidden Dashboard tab below 900px
+- Backend tests passing, strict compile clean, frontend build clean
 
 Current branch:
 
