@@ -19,8 +19,6 @@ services:
     build:
       context: ./theme1
       dockerfile: Dockerfile.dev
-    env_file:
-      - .env
     environment:
       MIX_ENV: dev
       DATABASE_URL: ecto://postgres:postgres@db:5432/theme1_dev
