@@ -71,15 +71,12 @@
 
       <!-- ==================== PRIVILEGED: DIRECTORY ==================== -->
       <template v-else>
-        <section class="hero">
-          <p class="eyebrow">User Workspace</p>
-        </section>
+
 
         <div class="content-grid">
           <!-- Search & Quick Selection Panel -->
           <aside class="search-panel">
             <div class="panel-heading">
-              <span class="step-number">01</span>
               <div><p class="eyebrow">Directory</p><h2>Find a person</h2></div>
             </div>
             <form class="search-form" @submit.prevent="getUser">
@@ -131,7 +128,6 @@
 
               <form class="editor" @submit.prevent="updateUser">
                 <div class="section-title">
-                  <span class="step-number">02</span>
                   <div><p class="eyebrow">Profile details</p><h3>Edit account</h3></div>
                 </div>
                 <div class="form-grid">
@@ -200,7 +196,7 @@
 
       <footer class="footer">
         <span>Time Manager directory &amp; Working Time System</span>
-        <span>Made for focused teams &middot; 2026</span>
+        <span>GOTHAM CITY &middot; 2026</span>
       </footer>
     </main>
   </AppLayout>

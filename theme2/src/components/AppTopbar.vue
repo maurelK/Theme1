@@ -2,8 +2,7 @@
   <header class="app-topbar">
     <div class="app-topbar-inner">
       <RouterLink class="app-brand" to="/" aria-label="Time Manager home">
-        <span class="app-brand-mark">t</span>
-        <span>timemanager</span>
+        <span>Time manager</span>
       </RouterLink>
 
       <!-- Desktop inline nav -->
@@ -22,7 +21,7 @@
       <!-- Desktop actions -->
       <div class="app-actions">
         <span class="app-role">
-          {{ roleLabel }} workspace <span class="status-dot"></span>
+          {{ roleLabel }} workspace
         </span>
         <button class="app-signout" type="button" @click="signOut">Sign out</button>
       </div>
@@ -88,7 +87,7 @@ async function signOut() {
   font: 700 19px var(--font-body);
   letter-spacing: -.07em;
   text-decoration: none;
-  text-transform: lowercase;
+  text-transform: uppercase;
 }
 
 .app-brand-mark {
