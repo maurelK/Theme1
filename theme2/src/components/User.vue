@@ -82,7 +82,6 @@
             <form class="search-form" @submit.prevent="getUser">
               <label for="search-email">Email address</label>
               <div class="input-with-icon">
-                <span aria-hidden="true">@</span>
                 <input 
                   id="search-email" 
                   v-model="searchEmail" 

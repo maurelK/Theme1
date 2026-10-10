@@ -13,7 +13,7 @@ h1 { margin-bottom: 22px; color: #243332; font-size: clamp(46px, 7vw, 82px); fon
 h1 em { color: #b5684b; font-family: "Playfair Display", Georgia, serif; letter-spacing: -.04em; }
 .hero-copy { max-width: 330px; color: #71807a; font-size: 15px; line-height: 1.7; }
 .content-grid { display: grid; grid-template-columns: minmax(240px, .72fr) minmax(0, 1.7fr); gap: 7vw; align-items: start; }
-.search-panel { padding: 28px; background: #e4e7de; border-top: 2px solid #273a37; }
+.search-panel { padding: 28px; background: #e4e7de; border-top: 2px solid #263836; border-bottom: 2px solid #263836; border-left: 2px solid #263836; border-right: 2px solid #263836; }
 .panel-heading, .section-title { display: flex; gap: 17px; align-items: flex-start; }
 .step-number { color: #a3614a; font: 11px "DM Mono", monospace; }
 h2 { margin-bottom: 7px; color: #263836; font-size: 25px; font-weight: 600; letter-spacing: -.05em; }
