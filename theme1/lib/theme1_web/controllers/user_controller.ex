@@ -2,6 +2,7 @@ defmodule Theme1Web.UserController do
   use Theme1Web, :controller
 
   import Ecto.Query
+  import Ecto.Changeset, only: [foreign_key_constraint: 3, change: 1]
 
   alias Theme1.Repo
   alias Theme1.User
@@ -96,26 +97,32 @@ defmodule Theme1Web.UserController do
 
   def delete(conn, %{"userID" => user_id}) do
     case Repo.get(User, user_id) do
-        nil ->
-            conn
-            |> put_status(:not_found)
-            |> json(%{error: "User not found"})
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "User not found"})
 
-        user ->
-            if can_access_user?(conn, user) do
-              case Repo.delete(user) do
-                {:ok, _deleted_user} -> send_resp(conn, :no_content, "")
-                {:error, _changeset} ->
-                  conn
-                  |> put_status(:unprocessable_entity)
-                  |> json(%{error: "Could not delete user"})
-              end
-            else
+      user ->
+        if can_access_user?(conn, user) do
+            case user
+               |> change()
+               |> foreign_key_constraint(:id, name: :clocks_user_id_fkey)
+               |> Repo.delete() do
+            {:ok, _deleted_user} ->
+              send_resp(conn, :no_content, "")
+
+            {:error, changeset} ->
               conn
-              |> put_status(:forbidden)
-              |> json(%{error: "You cannot delete this user"})
-            end
+              |> put_status(:conflict)
+              |> json(%{
+                error: "User has dependent records and cannot be deleted. Remove their clocks and working times first.",
+                details: errors_from_changeset(changeset)
+              })
+          end
+        else
+          conn
+          |> put_status(:forbidden)
+          |> json(%{error: "You cannot delete this user"})
         end
+    end
   end
 
   defp apply_filters(query, params) do

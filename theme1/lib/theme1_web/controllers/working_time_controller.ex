@@ -232,11 +232,21 @@ defmodule Theme1Web.WorkingTimeController do
     conn.assigns.current_user.role && conn.assigns.current_user.role.name
   end
 
-  defp translate_errors(changeset) do
+    # Handle both Ecto changesets and the bare {message, opts} tuples that
+  # validate_* helpers produce when they short-circuit into a list.
+  defp translate_errors(%Ecto.Changeset{} = changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
       Enum.reduce(opts, msg, fn {key, value}, acc ->
         String.replace(acc, "%{#{key}}", to_string(value))
       end)
     end)
   end
+
+  defp translate_errors({msg, opts}) when is_binary(msg) and is_list(opts) do
+    Enum.reduce(opts, msg, fn {key, value}, acc ->
+      String.replace(acc, "%{#{key}}", to_string(value))
+    end)
+  end
+
+  defp translate_errors(other), do: inspect(other)
 end

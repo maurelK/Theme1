@@ -29,14 +29,33 @@ if config_env() == :prod do
     System.get_env("AUTH_JWT_SECRET") ||
       raise "environment variable AUTH_JWT_SECRET is missing"
 
-  # Production reset links use the VM-configured SMTP adapter and public frontend URL.
+  # Production SMTP configuration.
+  #
+  # Gmail (and most providers) require STARTTLS on port 587 and implicit TLS
+  # on port 465. The `ssl` option means "TLS from the first byte" (implicit),
+  # which is wrong for 587 — that's why we pick based on the port.
+  smtp_port = String.to_integer(System.get_env("SMTP_PORT", "587"))
+  smtp_ssl? = System.get_env("SMTP_SSL", "false") == "true"
+
   config :theme1, Theme1.Mailer,
     adapter: Swoosh.Adapters.SMTP,
     relay: System.get_env("SMTP_RELAY") || raise("environment variable SMTP_RELAY is missing"),
-    port: String.to_integer(System.get_env("SMTP_PORT", "587")),
+    port: smtp_port,
     username: System.get_env("SMTP_USERNAME"),
     password: System.get_env("SMTP_PASSWORD"),
-    ssl: System.get_env("SMTP_SSL", "true") == "true"
+    # Implicit TLS only when explicitly enabled (e.g. port 465).
+    ssl: smtp_ssl?,
+    # STARTTLS is required by Gmail on port 587.
+    tls: :if_available,
+    auth: :always,
+    tls_options: [
+      versions: [:"tlsv1.2", :"tlsv1.3"],
+      verify: :verify_peer,
+      cacerts: :public_key.cacerts_get(),
+      server_name_indication: String.to_charlist(System.get_env("SMTP_RELAY", "smtp.gmail.com")),
+      depth: 3
+    ],
+    retries: 1
 
   database_url =
     System.get_env("DATABASE_URL") ||
