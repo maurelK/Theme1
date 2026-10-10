@@ -3,7 +3,7 @@
     <main class="dashboard-shell">
       <section class="dashboard-hero">
         <p class="dashboard-eyebrow">{{ roleIndex }} / {{ roleLabel }}</p>
-        <h1>{{ heroTitle }}<br><em>{{ heroAccent }}</em></h1>
+        <!-- <h1>{{ heroTitle }}<br><em>{{ heroAccent }}</em></h1> -->
         <p>{{ heroDescription }}</p>
       </section>
 

@@ -11,6 +11,40 @@
 h1, h2, h3, p { margin-top: 0; }
 h1 { margin-bottom: 22px; color: #243332; font-size: clamp(46px, 7vw, 82px); font-weight: 500; line-height: .98; letter-spacing: -.07em; }
 h1 em { color: #b5684b; font-family: "Playfair Display", Georgia, serif; letter-spacing: -.04em; }
+.typing-line {
+  display: inline-block;
+  overflow: hidden;
+  max-width: 100%;
+  white-space: nowrap;
+  vertical-align: bottom;
+  border-right: .08em solid currentColor;
+  animation: typing-reveal 1.1s steps(10, end) forwards, typing-cursor .8s step-end infinite;
+}
+.typing-line-second {
+  width: 0;
+  animation:
+    typing-reveal-second 1.4s steps(14, end) 1.1s forwards,
+    typing-cursor .8s step-end 1.1s infinite;
+}
+@keyframes typing-reveal {
+  from { width: 0; }
+  to { width: 10ch; }
+}
+@keyframes typing-reveal-second {
+  from { width: 0; }
+  to { width: 14ch; }
+}
+@keyframes typing-cursor {
+  50% { border-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .typing-line,
+  .typing-line-second {
+    width: auto;
+    animation: none;
+    border-right: 0;
+  }
+}
 .hero-copy { max-width: 330px; color: #71807a; font-size: 15px; line-height: 1.7; }
 .content-grid { display: grid; grid-template-columns: minmax(240px, .72fr) minmax(0, 1.7fr); gap: 7vw; align-items: start; }
 .search-panel { padding: 28px; background: #e4e7de; border-top: 2px solid #263836; border-bottom: 2px solid #263836; border-left: 2px solid #263836; border-right: 2px solid #263836; }

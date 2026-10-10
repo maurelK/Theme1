@@ -6,7 +6,10 @@
       <template v-if="isEmployee">
         <section class="hero">
           <p class="eyebrow">My profile</p>
-          <h1>Your time,<br><em>clearly yours.</em></h1>
+          <h1 aria-label="Your time, clearly yours.">
+            <span class="typing-line typing-line-first" aria-hidden="true">Your time,</span><br>
+            <em class="typing-line typing-line-second" aria-hidden="true">clearly yours.</em>
+          </h1>
           <p class="hero-copy">Manage your own details, working times, clock, and charts.</p>
         </section>
 
@@ -172,7 +175,6 @@
 
             <div v-if="isAdministrator" class="create-panel" style="margin-top: 40px;">
               <div class="section-title">
-                <span class="step-number">04</span>
                 <div><p class="eyebrow">New entry</p><h3>Invite someone</h3></div>
               </div>
               <form class="create-form create-form-invite" @submit.prevent="createUser">
