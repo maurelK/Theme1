@@ -43,6 +43,10 @@ defmodule Theme1.MixProject do
       {:joken, "~> 2.6"},
       {:pbkdf2_elixir, "~> 2.0"},
       {:swoosh, "~> 1.16"},
+      # Swoosh uses Req as its HTTP client for API-based adapters and to
+      # validate its runtime environment. It must be a direct dependency so
+      # it is present in the production release.
+      {:req, "~> 0.5"},
       {:oban, "~> 2.18"},
       {:phoenix, "~> 1.8.0"},
       {:phoenix_ecto, "~> 4.6"},
