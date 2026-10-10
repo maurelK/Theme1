@@ -7,9 +7,31 @@ defmodule Theme1Web.TeamController do
   alias Theme1.{Repo, Team, TeamMembership, User}
 
   # Return team membership data without exposing password material.
+  #
+  # Scoping:
+  #   * administrator / hr_payroll  -> all teams
+  #   * manager / employee          -> only teams they belong to
   def index(conn, _params) do
-    # Preload each member role because public_user/1 includes the safe role name.
-    teams = Repo.all(Team) |> Repo.preload(users: :role)
+    current_user = conn.assigns.current_user
+    role = current_user.role && current_user.role.name
+
+    teams =
+      case role do
+        r when r in ["administrator", "hr_payroll"] ->
+          Repo.all(Team) |> Repo.preload(users: :role)
+
+        _ ->
+          # Only teams the user is a member of.
+          Repo.all(
+            from t in Team,
+              join: m in TeamMembership,
+              on: m.team_id == t.id,
+              where: m.user_id == ^current_user.id,
+              order_by: [asc: t.name],
+              distinct: t.id
+          )
+          |> Repo.preload(users: :role)
+      end
 
     json(conn, Enum.map(teams, &team_json/1))
   end

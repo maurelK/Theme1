@@ -8,6 +8,7 @@ import LoginView from "../views/LoginView.vue";
 import DashboardView from "../views/DashboardView.vue";
 import ForgotPasswordView from "../views/ForgotPasswordView.vue";
 import ResetPasswordView from "../views/ResetPasswordView.vue";
+import AdminTeamsView from "../views/AdminTeamsView.vue";
 import AcceptInviteView from "../views/AcceptInviteView.vue";
 import { authState, initializeAuth } from "../services/auth";
 
@@ -65,6 +66,12 @@ const router = createRouter({
       meta: { guestOnly: true }
     },
     {
+      path: '/admin/teams',
+      name: 'AdminTeams',
+      component: AdminTeamsView,
+      meta: { requiresAuth: true, requiresRole: ['administrator', 'hr_payroll', 'manager'] }
+    },
+    {
       path: '/directory',
       name: 'Directory',
       component: User,
@@ -115,6 +122,14 @@ router.beforeEach(async (to) => {
 
   if (to.meta.requiresAuth && !authState.user) return { name: "Login" };
   if (to.meta.guestOnly && authState.user) return { name: "Home" };
+
+  // Role gate for admin-only routes.
+  if (to.meta.requiresRole && authState.user) {
+    const allowed = to.meta.requiresRole;
+    const role = authState.user.role;
+    if (!allowed.includes(role)) return { name: "Home" };
+  }
+
   return true;
 });
 

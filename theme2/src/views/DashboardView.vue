@@ -124,7 +124,7 @@
         <article class="dashboard-card dashboard-records-card">
           <h2>Teams and oversight</h2>
           <p>{{ teams.length }} teams currently exist. Membership changes are administrator-only.</p>
-          <RouterLink class="dashboard-button" to="/directory">Manage workspace</RouterLink>
+          <RouterLink class="dashboard-button" to="/admin/teams">Browse teams</RouterLink>
         </article>
         <article class="dashboard-card dashboard-admin-card">
           <h2>Administrator controls</h2>
