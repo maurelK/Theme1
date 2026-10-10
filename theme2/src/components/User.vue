@@ -12,16 +12,22 @@
 
         <section class="main-panel" aria-live="polite">
           <div v-if="user" class="profile-view">
-            <!-- Profile Header -->
-            <div class="profile-header">
-              <div class="avatar">{{ userInitials }}</div>
-              <div>
-                <p class="eyebrow">Your account</p>
-                <h2>{{ user.username }}</h2>
-                <p class="muted">{{ user.email }}</p>
+            <!-- Teams -->
+            <section class="team-card" v-if="myTeams.length > 0">
+              <p class="eyebrow">Your teams</p>
+              <div v-for="team in myTeams" :key="team.id" class="team-block">
+                <h3 class="team-name">{{ team.name }}</h3>
+                <p class="team-members-label">
+                  {{ otherMembers(team).length === 0 ? "No other members" : otherMembers(team).length + " other member" + (otherMembers(team).length === 1 ? "" : "s") }}
+                </p>
+                <ul class="team-members">
+                  <li v-for="member in otherMembers(team)" :key="member.id">
+                    <span class="team-member-name">{{ member.username }}</span>
+                    <span class="team-member-role">{{ member.role || "—" }}</span>
+                  </li>
+                </ul>
               </div>
-              <span class="member-tag">{{ authUser?.role || "employee" }}</span>
-            </div>
+            </section>
 
             <!-- Edit Account Form -->
             <form class="editor" @submit.prevent="updateUser">
@@ -242,7 +248,8 @@ export default {
       editUsername: "",
       editEmail: "",
       activeTab: "workingTimes",
-      allUsers: []
+      allUsers: [],
+      myTeams: []
     };
   },
 
@@ -299,6 +306,7 @@ export default {
       this.user = this.authUser;
       this.editUsername = this.authUser.username;
       this.editEmail = this.authUser.email;
+      this.fetchMyTeams();
     } else {
       this.fetchAllUsers();
     }
@@ -317,6 +325,25 @@ export default {
       } catch (err) {
         console.error(err);
       }
+    },
+
+    // Employees see only their own teams (backend enforces the scope).
+    async fetchMyTeams() {
+      try {
+        const response = await apiFetch("/api/teams");
+        if (response.ok) {
+          const data = await response.json();
+          this.myTeams = Array.isArray(data) ? data : (data.data || []);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    },
+
+    // Other members of the team, excluding the current user.
+    otherMembers(team) {
+      const myId = this.authUser?.id;
+      return (team.users || []).filter(u => u.id !== myId);
     },
 
     async fetchUserById(id) {
