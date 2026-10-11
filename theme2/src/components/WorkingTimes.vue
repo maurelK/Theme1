@@ -3,7 +3,7 @@
     <!-- Header Section -->
     <header class="wt-header">
       <div class="wt-title-group">
-        <p class="wt-eyebrow">User ID: {{ currentUserId }}</p>
+        <p class="wt-eyebrow">User ID: {{ currentUserId }} · Times shown in {{ tzLabel }}</p>
         <h1>Working Times <em>History</em></h1>
       </div>
       <div class="wt-actions">
@@ -93,8 +93,8 @@
         <thead>
           <tr>
             <th>ID</th>
-            <th>Start (YYYY-MM-DD hh:mm:ss)</th>
-            <th>End (YYYY-MM-DD hh:mm:ss)</th>
+            <th>Start (local)</th>
+            <th>End (local)</th>
             <th>Duration</th>
             <th>Overtime</th>
             <th>Source</th>
@@ -171,6 +171,15 @@
 import "./WorkingTime.css";
 import { apiFetch, authState } from "../services/auth";
 import CorrectionRequestModal from "./CorrectionRequestModal.vue";
+import {
+  parseUtc,
+  formatDateOnly,
+  formatTimeLong,
+  formatDateTimeForDisplay,
+  formatMinutes,
+  localInputToUtc,
+  browserTimezoneLabel
+} from "../utils/datetime";
 
 export default {
   name: "WorkingTimes",
@@ -192,7 +201,8 @@ export default {
       successMessage: "",
       startDateFilter: "",
       endDateFilter: "",
-      correctionTarget: null
+      correctionTarget: null,
+      tzLabel: browserTimezoneLabel()
     };
   },
 
@@ -273,37 +283,29 @@ export default {
   },
 
   methods: {
+    // Display UTC ISO strings as browser-local "YYYY-MM-DD HH:MM:SS".
     formatDate(dateStr) {
-      if (!dateStr) return "";
-      const formatted = dateStr.replace("T", " ").substring(0, 19);
-      if (formatted.length === 16) return formatted + ":00";
-      return formatted;
+      return formatDateTimeForDisplay(parseUtc(dateStr));
     },
 
+    // Format minutes as "2h 04m" or "34m".
     formatMinutes(mins) {
-      if (!mins) return "0m";
-      const h = Math.floor(mins / 60);
-      const m = mins % 60;
-      if (h === 0) return `${m}m`;
-      return `${h}h ${String(m).padStart(2, "0")}m`;
+      return formatMinutes(mins);
     },
 
+    // Convert a datetime-local input value to a UTC ISO string.
     formatInputToApi(inputVal) {
-      if (!inputVal) return "";
-      const d = new Date(inputVal);
-      if (isNaN(d.getTime())) return inputVal;
-      const pad = (n) => String(n).padStart(2, "0");
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      return localInputToUtc(inputVal);
     },
 
+    // Duration between two UTC ISO strings.
     getDuration(startStr, endStr) {
-      if (!startStr || !endStr) return "-";
-      const start = new Date(startStr.replace(" ", "T"));
-      const end = new Date(endStr.replace(" ", "T"));
-      const diffMs = end - start;
-      if (isNaN(diffMs) || diffMs < 0) return "-";
-      const mins = Math.floor(diffMs / 60000);
-      return this.formatMinutes(mins);
+      const start = parseUtc(startStr);
+      const end = parseUtc(endStr);
+      if (!start || !end) return "—";
+      const diff = Math.floor((end.getTime() - start.getTime()) / 60000);
+      if (diff <= 0) return "—";
+      return formatMinutes(diff);
     },
 
     async getWorkingTimes() {

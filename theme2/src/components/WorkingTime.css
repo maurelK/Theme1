@@ -372,3 +372,19 @@
   background: #e4e7de;
   color: #525e55;
 }
+
+.wt-tz-hint {
+  margin: 0 0 16px;
+  color: #71807a;
+  font: 11px "DM Mono", monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.wt-preview-hint {
+  display: block;
+  margin-top: 4px;
+  color: #71807a;
+  font: 11px "DM Mono", monospace;
+  letter-spacing: 0.04em;
+}

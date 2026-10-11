@@ -1,21 +1,22 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { apiFetch } from "../services/auth";
+import { parseUtc, formatTimeShort, formatMinutes } from "../utils/datetime";
 
 const props = defineProps({
   userId: { type: [Number, String], default: null }
 });
 
-// Wall clock — uses browser local time for the on-screen display.
+// Wall clock - ticks every second.
 const now = ref(new Date());
 let tickHandle = null;
 
 // Server state.
 const loading = ref(false);
 const statusLoading = ref(false);
-const status = ref(null);   // { in, since, duration_minutes, shift }
+const status = ref(null);
 const error = ref("");
-const lastAction = ref(""); // optional success feedback
+const lastAction = ref("");
 
 const userId = computed(() => {
   const u = props.userId;
@@ -33,39 +34,49 @@ const formattedTime = computed(() => {
 
 const clockedIn = computed(() => Boolean(status.value?.in));
 
+// Live elapsed: recompute from `since` on every tick, using the browser's
+// current time. Never trust the server's duration_minutes snapshot for the
+// running counter — it only refreshes on loadStatus().
 const elapsedLabel = computed(() => {
-  const mins = status.value?.duration_minutes ?? 0;
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  if (h === 0) return `${m}m`;
-  return `${h}h ${String(m).padStart(2, "0")}m`;
+  if (!clockedIn.value) return "0m";
+  const start = parseUtc(status.value?.since);
+  if (!start) return "0m";
+  const minutes = Math.max(0, Math.floor((now.value.getTime() - start.getTime()) / 60000));
+  return formatMinutes(minutes);
 });
 
+// Display the clock-in timestamp in browser-local time.
 const sinceLabel = computed(() => {
-  if (!status.value?.since) return "";
-  const dt = new Date(status.value.since);
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+  const start = parseUtc(status.value?.since);
+  return start ? formatTimeShort(start) : "";
 });
+
+// Human-readable label for the shift's timezone.
+function shiftTzLabel(tzMinutes) {
+  if (tzMinutes === 0) return "UTC";
+  const sign = tzMinutes > 0 ? "+" : "-";
+  const abs = Math.abs(tzMinutes);
+  const h = String(Math.floor(abs / 60)).padStart(2, "0");
+  const m = String(abs % 60).padStart(2, "0");
+  return `UTC${sign}${h}:${m}`;
+}
 
 const shiftLabel = computed(() => {
   const s = status.value?.shift;
-  if (!s || s.start_minutes == null || s.end_minutes == null) return "No shift configured";
+  if (!s || s.start_minutes == null || s.end_minutes == null) {
+    return "No shift configured";
+  }
   const fmt = (mins) => {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   };
-  const tz = s.tz_offset_minutes ?? 0;
-  const tzLabel =
-    tz === 0 ? "UTC" : `UTC${tz > 0 ? "+" : "-"}${String(Math.floor(Math.abs(tz) / 60)).padStart(2, "0")}:${String(Math.abs(tz) % 60).padStart(2, "0")}`;
-  return `${fmt(s.start_minutes)}–${fmt(s.end_minutes)} (${tzLabel}) · ${s.source}`;
+  return `${fmt(s.start_minutes)}-${fmt(s.end_minutes)} (${shiftTzLabel(s.tz_offset_minutes ?? 0)}) - ${s.source}`;
 });
 
 async function loadStatus() {
   if (!userId.value) return;
   statusLoading.value = true;
-  error.value = "";
 
   try {
     const res = await apiFetch(`/api/clocks/${userId.value}/status`);
@@ -74,6 +85,8 @@ async function loadStatus() {
       throw new Error(body.error || `Unable to load status (${res.status})`);
     }
     status.value = await res.json();
+    // Note: do NOT clear `error.value` here — see BUG-QA004-002. Errors set
+    // by `toggle()` should persist until the user takes a new action.
   } catch (err) {
     error.value = err.message || "Unable to load clock status.";
   } finally {
@@ -97,19 +110,18 @@ async function toggle() {
     const body = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      // Common conflicts get friendly messages.
       if (res.status === 409) {
-        error.value = body.error || (action === "in" ? "Already clocked in." : "Not currently clocked in.");
+        error.value =
+          body.error || (action === "in" ? "Already clocked in." : "Not currently clocked in.");
       } else {
         error.value = body.error || `Request failed (${res.status})`;
       }
-      // Refresh status anyway — server may have moved it.
+      // Refresh status but leave the error message visible.
       await loadStatus();
       return;
     }
 
     lastAction.value = action === "in" ? "Clocked in." : "Clocked out.";
-    // Force an immediate status reload so the UI reflects the new state.
     await loadStatus();
   } catch (err) {
     error.value = err.message || "Unable to update clock.";
@@ -119,6 +131,8 @@ async function toggle() {
 }
 
 watch(userId, () => {
+  error.value = "";
+  lastAction.value = "";
   loadStatus();
 });
 
@@ -142,9 +156,9 @@ onBeforeUnmount(() => {
 
     <div v-else class="clock-panel">
       <div class="clock-status-line">
-        <span v-if="statusLoading">Checking status…</span>
+        <span v-if="statusLoading && !status">Checking status...</span>
         <span v-else-if="clockedIn">
-          Clocked in since <strong>{{ sinceLabel }}</strong> · elapsed <strong>{{ elapsedLabel }}</strong>
+          Clocked in since <strong>{{ sinceLabel }}</strong> - elapsed <strong>{{ elapsedLabel }}</strong>
         </span>
         <span v-else>Not clocked in.</span>
       </div>
@@ -157,7 +171,7 @@ onBeforeUnmount(() => {
         :disabled="loading || statusLoading"
         @click="toggle"
       >
-        {{ loading ? "Working…" : clockedIn ? "Clock Out" : "Clock In" }}
+        {{ loading ? "Working..." : clockedIn ? "Clock Out" : "Clock In" }}
       </button>
 
       <p v-if="error" class="clock-alert clock-alert-error">{{ error }}</p>
