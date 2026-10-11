@@ -39,8 +39,15 @@
                 <label>Full name<input v-model="editUsername" type="text" placeholder="Full name" required></label>
                 <label>Email address<input v-model="editEmail" type="email" placeholder="name@company.com" required></label>
               </div>
+
+              <p v-if="editError" class="editor-alert editor-alert-error">{{ editError }}</p>
+              <p v-else-if="editSuccess" class="editor-alert editor-alert-success">{{ editSuccess }}</p>
+
               <div class="editor-actions">
-                <button class="button button-primary" type="submit">Save changes<span class="button-arrow" aria-hidden="true">&#8599;</span></button>
+                <button class="button button-primary" type="submit" :disabled="editSaving">
+                  {{ editSaving ? "Saving..." : "Save changes" }}
+                  <span class="button-arrow" aria-hidden="true">&#8599;</span>
+                </button>
               </div>
             </form>
 
@@ -146,8 +153,15 @@
                   <label>Full name<input v-model="editUsername" type="text" placeholder="Full name" required></label>
                   <label>Email address<input v-model="editEmail" type="email" placeholder="name@company.com" required></label>
                 </div>
+
+                <p v-if="editError" class="editor-alert editor-alert-error">{{ editError }}</p>
+                <p v-else-if="editSuccess" class="editor-alert editor-alert-success">{{ editSuccess }}</p>
+
                 <div class="editor-actions">
-                  <button class="button button-primary" type="submit">Save changes<span class="button-arrow" aria-hidden="true">&#8599;</span></button>
+                  <button class="button button-primary" type="submit" :disabled="editSaving">
+                    {{ editSaving ? "Saving..." : "Save changes" }}
+                    <span class="button-arrow" aria-hidden="true">&#8599;</span>
+                  </button>
                   <button class="text-button" type="button" @click="deleteUser">Remove account</button>
                 </div>
               </form>
@@ -247,6 +261,9 @@ export default {
       inviteError: "",
       editUsername: "",
       editEmail: "",
+      editSaving: false,
+      editError: "",
+      editSuccess: "",
       activeTab: "workingTimes",
       allUsers: [],
       myTeams: []
@@ -419,22 +436,72 @@ export default {
     },
 
     async updateUser() {
-      const response = await apiFetch(`/api/users/${this.user.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: this.editUsername,
-          email: this.editEmail
-        })
-      });
+      // Client-side validation to avoid the round trip on obvious issues.
+      const trimmedName = (this.editUsername || "").trim();
+      const trimmedEmail = (this.editEmail || "").trim();
 
-      if (!response.ok) {
-        throw new Error("Failed to update user");
+      if (trimmedName.length === 0) {
+        this.editError = "Full name cannot be blank.";
+        this.editSuccess = "";
+        return;
+      }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmedEmail)) {
+        this.editError = "Enter a valid email address.";
+        this.editSuccess = "";
+        return;
       }
 
-      const updated = await response.json();
-      this.selectUser(updated.data || updated);
-      this.fetchAllUsers();
+      this.editSaving = true;
+      this.editError = "";
+      this.editSuccess = "";
+
+      try {
+        const response = await apiFetch(`/api/users/${this.user.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: trimmedName,
+            email: trimmedEmail
+          })
+        });
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          const detail = this.extractError(body) || `Update failed (${response.status})`;
+          throw new Error(detail);
+        }
+
+        const updated = await response.json();
+        this.selectUser(updated.data || updated);
+        this.editSuccess = "Profile updated.";
+        setTimeout(() => (this.editSuccess = ""), 2500);
+        this.fetchAllUsers();
+      } catch (err) {
+        console.error(err);
+        this.editError = err.message || "Unable to update profile.";
+      } finally {
+        this.editSaving = false;
+      }
+    },
+
+    // Extract a user-friendly message from either {errors: {...}} or {error: "..."}.
+    extractError(body) {
+      if (!body) return null;
+
+      if (typeof body.error === "string" && body.error.length > 0) {
+        return body.error;
+      }
+
+      if (body.errors && typeof body.errors === "object") {
+        // Flatten {field: [msg1, msg2], ...} into a single string.
+        const parts = Object.entries(body.errors).flatMap(([field, msgs]) => {
+          const list = Array.isArray(msgs) ? msgs : [msgs];
+          return list.map((m) => `${field}: ${m}`);
+        });
+        return parts.length > 0 ? parts.join(" · ") : null;
+      }
+
+      return null;
     },
 
     async getUser() {

@@ -1,5 +1,6 @@
 <template>
-  <main class="wt-wrapper">
+  <component :is="layout">
+    <main class="wt-wrapper">
     <!-- Header Section -->
     <header class="wt-header">
       <div class="wt-title-group">
@@ -14,7 +15,7 @@
           v-if="canManageEntries"
           type="button"
           class="btn-wt btn-primary"
-          @click="$emit('go-create-entry')"
+          @click="goToCreateEntry"
         >
           <span>+ Create entry</span>
         </button>
@@ -83,7 +84,7 @@
           type="button"
           class="btn-wt btn-primary"
           style="margin-top: 16px;"
-          @click="$emit('go-create-entry')"
+          @click="goToCreateEntry"
         >
           Create first entry
         </button>
@@ -163,14 +164,16 @@
       :working-time="correctionTarget"
       @close="correctionTarget = null"
       @submitted="onCorrectionSubmitted"
-    />
-  </main>
+      />
+    </main>
+  </component>
 </template>
 
 <script>
 import "./WorkingTime.css";
 import { apiFetch, authState } from "../services/auth";
 import CorrectionRequestModal from "./CorrectionRequestModal.vue";
+import AppLayout from "./AppLayout.vue";
 import {
   parseUtc,
   formatDateOnly,
@@ -184,7 +187,7 @@ import {
 export default {
   name: "WorkingTimes",
 
-  components: { CorrectionRequestModal },
+  components: { AppLayout, CorrectionRequestModal },
 
   props: {
     userId: {
@@ -207,6 +210,12 @@ export default {
   },
 
   computed: {
+    // Wrap with AppLayout only when rendered as a standalone route.
+    // When rendered as a tab inside User.vue, User.vue provides the layout.
+    layout() {
+      return this.$route.name === "WorkingTimes" ? "AppLayout" : "div";
+    },
+
     currentUserId() {
       if (this.userId) return this.userId;
       return this.$route.params.userID || this.$route.params.userid || 1;
@@ -360,6 +369,21 @@ export default {
       } catch (err) {
         console.error(err);
         this.error = err.message || "Unable to delete entry.";
+      }
+    },
+
+    // Notify the parent (User.vue switches tabs) AND fall back to a direct
+    // navigation if we're rendered standalone (no parent listener).
+    goToCreateEntry() {
+      const hasParentHandler =
+        this.$attrs &&
+        (this.$attrs.onGoCreateEntry || this.$attrs["onGo-create-entry"]);
+
+      this.$emit("go-create-entry");
+
+      if (!hasParentHandler) {
+        // Standalone route: navigate to the dedicated create page.
+        this.$router.push(`/workingTime/${this.currentUserId}`);
       }
     },
 

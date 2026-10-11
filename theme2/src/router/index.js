@@ -10,6 +10,7 @@ import ForgotPasswordView from "../views/ForgotPasswordView.vue";
 import ResetPasswordView from "../views/ResetPasswordView.vue";
 import AdminTeamsView from "../views/AdminTeamsView.vue";
 import AcceptInviteView from "../views/AcceptInviteView.vue";
+import NotFoundView from "../views/NotFoundView.vue";
 import { authState, initializeAuth } from "../services/auth";
 
 const router = createRouter({
@@ -112,6 +113,11 @@ const router = createRouter({
       name: "ChartManager",
       component: ChartManager,
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'NotFound',
+      component: NotFoundView
     }
   ]
 });

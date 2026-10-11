@@ -173,3 +173,23 @@ input::placeholder { color: #9ca79c; }
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+/* Profile edit feedback */
+.editor-alert {
+  margin: 18px 0 0;
+  padding: 10px 14px;
+  font-size: 12px;
+  border-left: 3px solid transparent;
+}
+
+.editor-alert-error {
+  color: #a3614a;
+  background: #f6e6de;
+  border-left-color: #a3614a;
+}
+
+.editor-alert-success {
+  color: #287c78;
+  background: #d9eae8;
+  border-left-color: #287c78;
+}

@@ -1,40 +1,43 @@
 <template>
-  <main id="charts" class="chart-page">
-    <header class="chart-hero">
-      <div>
-        <p class="chart-kicker">Time Manager / Insights</p>
-        <h1>See how your<br><em>time moves.</em></h1>
-      </div>
-      <p class="chart-subtitle">A clear view of your working rhythm, day by day and over time.</p>
-    </header>
+  <component :is="layout">
+    <main id="charts" class="chart-page">
+      <header class="chart-hero">
+        <div>
+          <p class="chart-kicker">Time Manager / Insights</p>
+          <h1>See how your<br><em>time moves.</em></h1>
+        </div>
+        <p class="chart-subtitle">A clear view of your working rhythm, day by day and over time.</p>
+      </header>
 
-    <section class="date-toolbar" aria-label="Filter working times">
-      <label class="date-field">
-        From
-        <input v-model="startDate" type="date">
-      </label>
-      <label class="date-field">
-        To
-        <input v-model="endDate" type="date">
-      </label>
-      <button class="clear-dates" type="button" @click="startDate = ''; endDate = ''">Clear dates</button>
-    </section>
+      <section class="date-toolbar" aria-label="Filter working times">
+        <label class="date-field">
+          From
+          <input v-model="startDate" type="date">
+        </label>
+        <label class="date-field">
+          To
+          <input v-model="endDate" type="date">
+        </label>
+        <button class="clear-dates" type="button" @click="startDate = ''; endDate = ''">Clear dates</button>
+      </section>
 
-    <p v-if="loading" class="chart-status">Loading working times...</p>
-    <p v-if="error" class="chart-status chart-status-error">{{ error }}</p>
+      <p v-if="loading" class="chart-status">Loading working times...</p>
+      <p v-if="error" class="chart-status chart-status-error">{{ error }}</p>
 
-    <section v-if="!loading && !error" class="chart-grid" aria-label="Working time charts">
-      <article class="chart-card chart-card-wide"><WorkingHoursBarChart :workingTimes="filteredWorkingTimes" /></article>
-      <article class="chart-card"><WorkingHoursLineChart :workingTimes="filteredWorkingTimes" /></article>
-      <article class="chart-card chart-card-pie"><WorkingHoursPieChart :workingTimes="filteredWorkingTimes" /></article>
-    </section>
-  </main>
+      <section v-if="!loading && !error" class="chart-grid" aria-label="Working time charts">
+        <article class="chart-card chart-card-wide"><WorkingHoursBarChart :workingTimes="filteredWorkingTimes" /></article>
+        <article class="chart-card"><WorkingHoursLineChart :workingTimes="filteredWorkingTimes" /></article>
+        <article class="chart-card chart-card-pie"><WorkingHoursPieChart :workingTimes="filteredWorkingTimes" /></article>
+      </section>
+      </main>
+  </component>
 </template>
 
 <script>
 import WorkingHoursBarChart from "./WorkingHoursBarChart.vue";
 import WorkingHoursLineChart from "./WorkingHoursLineChart.vue";
 import WorkingHoursPieChart from "./WorkingHoursPieChart.vue";
+import AppLayout from "./AppLayout.vue";
 // Route chart data requests through the shared authenticated API helper.
 import { apiFetch } from "../services/auth";
 
@@ -42,6 +45,7 @@ export default {
   name: "ChartManager",
 
   components: {
+    AppLayout,
     WorkingHoursBarChart,
     WorkingHoursLineChart,
     WorkingHoursPieChart
@@ -75,6 +79,12 @@ export default {
         return rp;
       }
       return null;
+    },
+
+    // Wrap with AppLayout only when rendered as a standalone route.
+    // When rendered as a tab inside User.vue, User.vue already provides the layout.
+    layout() {
+      return this.$route.name === "ChartManager" ? "AppLayout" : "div";
     },
 
     filteredWorkingTimes() {
