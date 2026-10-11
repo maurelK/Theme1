@@ -4,14 +4,7 @@
 
       <!-- ==================== EMPLOYEE: PROFILE ONLY ==================== -->
       <template v-if="isEmployee">
-        <section class="hero">
-          <p class="eyebrow">My profile</p>
-          <h1 aria-label="Your time, clearly yours.">
-            <span class="typing-line typing-line-first" aria-hidden="true">Your time,</span><br>
-            <em class="typing-line typing-line-second" aria-hidden="true">clearly yours.</em>
-          </h1>
-          <p class="hero-copy">Manage your own details, working times, clock, and charts.</p>
-        </section>
+
 
         <section class="main-panel" aria-live="polite">
           <div v-if="user" class="profile-view">
@@ -54,13 +47,11 @@
               <div class="tab-nav">
                 <button type="button" class="btn-wt" :class="activeTab === 'workingTimes' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'workingTimes'">Working Times</button>
                 <button type="button" class="btn-wt" :class="activeTab === 'clock' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'clock'">Clock Manager</button>
-                <button type="button" class="btn-wt tab-nav-desktop-only" :class="activeTab === 'charts' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'charts'">Dashboard</button>
               </div>
 
               <div class="tab-content-area">
                 <WorkingTimes v-if="activeTab === 'workingTimes'" :userId="user.id" @go-create-entry="activeTab = 'create'" />
                 <ClockManager v-else-if="activeTab === 'clock'" :userId="user.id" />
-                <ChartManager v-else-if="activeTab === 'charts'" :userId="user.id" />
               </div>
             </div>
           </div>
@@ -154,14 +145,12 @@
                 <div class="tab-nav">
                   <button type="button" class="btn-wt" :class="activeTab === 'workingTimes' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'workingTimes'">Working Times</button>
                   <button type="button" class="btn-wt" :class="activeTab === 'clock' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'clock'">Clock Manager</button>
-                  <button type="button" class="btn-wt tab-nav-desktop-only" :class="activeTab === 'charts' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'charts'">Dashboard</button>
                   <button type="button" class="btn-wt" :class="activeTab === 'create' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'create'">Create Entry</button>
                 </div>
 
                 <div class="tab-content-area">
                   <WorkingTimes v-if="activeTab === 'workingTimes'" :userId="user.id" @go-create-entry="activeTab = 'create'" />
                   <ClockManager v-else-if="activeTab === 'clock'" :userId="user.id" />
-                  <ChartManager v-else-if="activeTab === 'charts'" :userId="user.id" />
                   <WorkingTime v-else-if="activeTab === 'create'" :userId="user.id" />
                 </div>
               </div>
@@ -207,7 +196,6 @@
 import WorkingTimes from "./WorkingTimes.vue";
 import WorkingTime from "./WorkingTime.vue";
 import ClockManager from "./ClockManager.vue";
-import ChartManager from "./ChartManager.vue";
 import AppLayout from "./AppLayout.vue";
 // Route profile requests through the shared authenticated API helper.
 import { apiFetch, authState, logout } from "../services/auth";
@@ -219,7 +207,6 @@ export default {
     WorkingTimes,
     WorkingTime,
     ClockManager,
-    ChartManager,
     AppLayout
   },
 
@@ -279,7 +266,6 @@ export default {
         if (routeUserId) {
           this.fetchUserById(routeUserId);
           if (this.$route.name === 'ClockManager') this.activeTab = 'clock';
-          else if (this.$route.name === 'ChartManager') this.activeTab = 'charts';
           else if (this.$route.name === 'WorkingTimeCreate') this.activeTab = 'create';
           else this.activeTab = 'workingTimes';
         }

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { apiFetch } from "../services/auth";
+import { notifyClockIn, notifyClockOut, notifyError } from "../services/feedback";
 
 const props = defineProps({
   userId: { type: [Number, String], default: null }
@@ -76,6 +77,7 @@ async function loadStatus() {
     status.value = await res.json();
   } catch (err) {
     error.value = err.message || "Unable to load clock status.";
+    notifyError();
   } finally {
     statusLoading.value = false;
   }
@@ -103,16 +105,19 @@ async function toggle() {
       } else {
         error.value = body.error || `Request failed (${res.status})`;
       }
+      notifyError();
       // Refresh status anyway — server may have moved it.
       await loadStatus();
       return;
     }
 
     lastAction.value = action === "in" ? "Clocked in." : "Clocked out.";
+    action === "in" ? notifyClockIn() : notifyClockOut();
     // Force an immediate status reload so the UI reflects the new state.
     await loadStatus();
   } catch (err) {
     error.value = err.message || "Unable to update clock.";
+    notifyError();
   } finally {
     loading.value = false;
   }

@@ -131,35 +131,15 @@ import ResetPasswordView from "../views/ResetPasswordView.vue";
 import AcceptInviteView from "../views/AcceptInviteView.vue";
 import { authState, initializeAuth } from "../services/auth";
 
-// Mobile build (vite build --mode cordova): hash URLs, no dashboards.
+// Mobile build (vite build --mode cordova): hash URLs, same routes as the web.
 const isCordova = import.meta.env.MODE === "cordova";
 
-// Home: the dashboard on the web, the clock page on mobile (dashboards are excluded from mobile).
-const homeRoute = isCordova
-  ? {
-      path: "/",
-      name: "Home",
-      redirect: () =>
-        authState.user
-          ? { name: "ClockManager", params: { userid: authState.user.id } }
-          : { name: "Login" }
-    }
-  : {
-      path: "/",
-      name: "Home",
-      component: DashboardView,
-      meta: { requiresAuth: true }
-    };
-
-// Routes available on the web only.
-const webOnlyRoutes = [
-  {
-    path: "/chartManager/:userid",
-    name: "ChartManager",
-    component: ChartManager,
-    meta: { requiresAuth: true }
-  }
-];
+const homeRoute = {
+  path: "/",
+  name: "Home",
+  component: DashboardView,
+  meta: { requiresAuth: true }
+};
 
 const router = createRouter({
   // No server inside the app to rewrite URLs: hash mode always reloads index.html.
@@ -246,7 +226,12 @@ const router = createRouter({
       props: true,
       meta: { requiresAuth: true }
     },
-    ...(isCordova ? [] : webOnlyRoutes)
+    {
+      path: "/chartManager/:userid",
+      name: "ChartManager",
+      component: ChartManager,
+      meta: { requiresAuth: true }
+    }
   ]
 });
 

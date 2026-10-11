@@ -63,6 +63,8 @@ input::placeholder { color: #9ca79c; }
 .button:hover:not(:disabled) { transform: translateY(-2px); }
 .button:disabled { cursor: wait; opacity: .6; }
 .button-primary { background: #263b38; color: #fffdf7; }
+.search-form .button-primary,
+.search-form .button-primary span { color: #fffdf7; }
 .button-primary:hover:not(:disabled) { background: #35504b; }
 .button-secondary { background: #d4ddd0; color: #263b38; }
 .button-arrow { font-size: 17px; line-height: 0; }

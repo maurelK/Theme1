@@ -1,4 +1,5 @@
 import { reactive } from "vue";
+import { notifyError } from "./feedback";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 // Keep the JWT in the HttpOnly cookie and retain only safe session data in memory.
 export const authState = reactive({
@@ -22,11 +23,16 @@ export async function apiFetch(path, options = {}) {
     headers.set("X-CSRF-Token", authState.csrfToken);
   }
 
-  return fetch(API_BASE + path, {
-    ...options,
-    credentials: "include",
-    headers
-  });
+  try {
+    return await fetch(API_BASE + path, {
+      ...options,
+      credentials: "include",
+      headers
+    });
+  } catch (error) {
+    notifyError();
+    throw error;
+  }
 }
 
 // Restore the browser session after a refresh without reading the JWT.
@@ -85,7 +91,10 @@ export async function login(credentials) {
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Unable to log in");
+  if (!response.ok) {
+    notifyError();
+    throw new Error(data.error || "Unable to log in");
+  }
 
   authState.user = data.user;
   authState.csrfToken = data.csrf_token;
@@ -112,7 +121,10 @@ export async function resetPassword(token, newPassword) {
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Unable to reset password");
+  if (!response.ok) {
+    notifyError();
+    throw new Error(data.error || "Unable to reset password");
+  }
   return data;
 }
 
@@ -125,7 +137,10 @@ export async function acceptInvitation(token, newPassword) {
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Unable to accept invitation");
+  if (!response.ok) {
+    notifyError();
+    throw new Error(data.error || "Unable to accept invitation");
+  }
   return data;
 }
 

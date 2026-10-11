@@ -2,9 +2,37 @@
   <AppLayout>
     <main class="dashboard-shell">
       <section class="dashboard-hero">
-        <p class="dashboard-eyebrow">{{ roleIndex }} / {{ roleLabel }}</p>
-        <!-- <h1>{{ heroTitle }}<br><em>{{ heroAccent }}</em></h1> -->
-        <p>{{ heroDescription }}</p>
+        <p class="dashboard-eyebrow hero-role">{{ roleLabel }}</p>
+        <h1 class="hero-title" aria-label="Dashboard overview">
+          <span class="hero-title-line">
+            <span
+              v-for="(character, index) in heroTitleCharacters"
+              :key="`title-${index}`"
+              class="hero-letter"
+              aria-hidden="true"
+              :style="{ animationDelay: `${index * 35}ms` }"
+            >{{ character === " " ? "\u00a0" : character }}</span>
+          </span>
+          <br>
+          <em class="hero-title-line">
+            <span
+              v-for="(character, index) in heroAccentCharacters"
+              :key="`accent-${index}`"
+              class="hero-letter"
+              aria-hidden="true"
+              :style="{ animationDelay: `${(heroTitleCharacters.length * 35) + 180 + index * 45}ms` }"
+            >{{ character === " " ? "\u00a0" : character }}</span>
+          </em>
+        </h1>
+        <p class="hero-description" aria-label="Dashboard description">
+          <span
+            v-for="(word, index) in heroDescriptionWords"
+            :key="`description-${index}`"
+            class="hero-word"
+            aria-hidden="true"
+            :style="{ animationDelay: `${(heroTitleCharacters.length + heroAccentCharacters.length) * 35 + 500 + index * 55}ms` }"
+          >{{ word }}</span>
+        </p>
       </section>
 
       <section class="dashboard-note">
@@ -230,10 +258,13 @@ import "./Dashboard.css";
 const router = useRouter();
 const role = computed(() => authState.user?.role || "employee");
 const roleLabel = computed(() => role.value.replace("_", " "));
-const roleIndex = computed(() => ({ employee: "01", manager: "02", hr_payroll: "03", administrator: "04" }[role.value] || "01"));
+const roleIndex = computed(() => ({ employee: " ", manager: "02", hr_payroll: "03", administrator: "04" }[role.value] || "01"));
 const heroTitle = computed(() => ({ employee: "Your time,", manager: "A clearer view of", hr_payroll: "Approved records,", administrator: "Clear rules for" }[role.value] || "Your workspace,"));
 const heroAccent = computed(() => ({ employee: "clearly yours.", manager: "team time.", hr_payroll: "with context.", administrator: "time records." }[role.value] || "clearly yours."));
 const heroDescription = computed(() => ({ employee: "A simple place to record your hours, review your records, and flag anything that needs a second look.", manager: "Plan coverage, review exceptions, and understand team records without checking every profile manually.", hr_payroll: "Review approved reports and time categories with a clear audit trail.", administrator: "Set fair access, approved categories, and accountable reporting across the system." }[role.value] || "A clear place to manage time."));
+const heroTitleCharacters = computed(() => Array.from(heroTitle.value));
+const heroAccentCharacters = computed(() => Array.from(heroAccent.value));
+const heroDescriptionWords = computed(() => heroDescription.value.split(" "));
 const noteTitle = computed(() => role.value === "employee" ? "A clear promise" : "Access and responsibility");
 const noteText = computed(() => role.value === "employee" ? "Time Manager records working time, not every action on your computer." : "Access is scoped by role, ownership, and team membership.");
 const currentTime = ref("--:--");
