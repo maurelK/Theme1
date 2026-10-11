@@ -52,6 +52,15 @@
 .dashboard-button:hover { background: #35504b; }
 .dashboard-footer { margin-top: 46px; padding-top: 16px; border-top: 1px solid #d4d6cc; }
 .dashboard-footer a { color: #287c78; font-weight: 700; text-decoration: none; }
+.dashboard-error {
+  padding: 14px 16px;
+  margin: 12px 0;
+  border-left: 3px solid #a3614a;
+  background: #f6e6de;
+  color: #a3614a;
+  font-size: 12px;
+  font-weight: 600;
+}
 
 /* Shift configuration targets */
 .shift-config-targets {

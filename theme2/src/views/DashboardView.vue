@@ -20,9 +20,10 @@
           <RouterLink class="dashboard-button" to="/directory">View my records</RouterLink>
         </article>
         <article class="dashboard-card dashboard-wide-card">
-          <p class="dashboard-eyebrow">This week</p>
+          <p class="dashboard-eyebrow">This week (Mon–Sun)</p>
           <div class="dashboard-metric-row">
-            <strong>{{ employeeHours }} h</strong>
+            <strong v-if="!recordsError">{{ employeeHours }} h</strong>
+            <strong v-else>—</strong>
             <span>recorded hours</span>
           </div>
           <div class="dashboard-progress"><span :style="{ width: `${employeeProgress}%` }"></span></div>
@@ -31,7 +32,8 @@
         <article class="dashboard-card dashboard-records-card">
           <h2>Recent time entries</h2>
           <p>Review your records and manage working-time entries.</p>
-          <div v-if="records.length === 0" class="dashboard-empty">No working-time entries yet.</div>
+          <div v-if="recordsError" class="dashboard-error">{{ recordsError }}</div>
+          <div v-else-if="records.length === 0" class="dashboard-empty">No working-time entries yet.</div>
           <div v-for="record in records.slice(0, 3)" :key="record.id" class="dashboard-row">
             <span>{{ formatDate(record.start) }}</span>
             <strong>{{ duration(record.start, record.end) }}</strong>
@@ -220,6 +222,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { apiFetch, authState, logout } from "../services/auth";
+import { parseUtc } from "../utils/datetime";
 import AppLayout from "../components/AppLayout.vue";
 import PasswordField from "../components/PasswordField.vue";
 import ShiftEditorModal from "../components/ShiftEditorModal.vue";
@@ -238,6 +241,7 @@ const noteTitle = computed(() => role.value === "employee" ? "A clear promise" :
 const noteText = computed(() => role.value === "employee" ? "Time Manager records working time, not every action on your computer." : "Access is scoped by role, ownership, and team membership.");
 const currentTime = ref("--:--");
 const records = ref([]);
+const recordsError = ref("");
 const teams = ref([]);
 const roles = ref([]);
 const users = ref([]);
@@ -254,7 +258,30 @@ const shiftTarget = ref(null);
 const shiftFeedback = ref("");
 const pickerMode = ref(null); // null | "user" | "team"
 
-const employeeHours = computed(() => records.value.reduce((total, record) => total + durationHours(record.start, record.end), 0).toFixed(1));
+// Total hours worked in the current week (Monday 00:00 → Sunday 23:59:59
+// in browser-local time). Uses the same UTC parsing as the rest of the app.
+const employeeHours = computed(() => {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sunday, 1 = Monday, ...
+  // Walk back to Monday. Treat Sunday as day 7 so we compute correctly.
+  const daysFromMonday = day === 0 ? 6 : day - 1;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysFromMonday);
+  monday.setHours(0, 0, 0, 0);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 7); // next Monday 00:00 = exclusive upper bound
+
+  const totalMinutes = records.value.reduce((sum, record) => {
+    const start = parseUtc(record.start);
+    const end = parseUtc(record.end);
+    if (!start || !end) return sum;
+    // Include the record if its start falls within this week.
+    if (start < monday || start >= sunday) return sum;
+    return sum + Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60000));
+  }, 0);
+
+  return (totalMinutes / 60).toFixed(1);
+});
 const employeeProgress = computed(() => Math.min(100, Math.round((Number(employeeHours.value) / 40) * 100)));
 const weekDays = computed(() => {
   const labels = ["Mon", "Tue", "Wed", "Thu", "Fri"];
@@ -278,11 +305,17 @@ onMounted(async () => {
   currentTime.value = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const userId = authState.user?.id;
 
-  if (role.value === "employee" && userId) {
-    const response = await apiFetch(`/api/workingtime/${userId}`);
-    if (response.ok) {
+    if (role.value === "employee" && userId) {
+    try {
+      const response = await apiFetch(`/api/workingtime/${userId}`);
+      if (!response.ok) {
+        throw new Error(`Failed to load working times (${response.status})`);
+      }
       const payload = await response.json();
       records.value = Array.isArray(payload) ? payload : (payload.data || []);
+    } catch (err) {
+      console.error(err);
+      recordsError.value = err.message || "Unable to load working-time data.";
     }
   }
 
