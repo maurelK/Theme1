@@ -20,9 +20,10 @@
           <RouterLink class="dashboard-button" to="/directory">View my records</RouterLink>
         </article>
         <article class="dashboard-card dashboard-wide-card">
-          <p class="dashboard-eyebrow">This week</p>
+          <p class="dashboard-eyebrow">This week (Mon–Sun)</p>
           <div class="dashboard-metric-row">
-            <strong>{{ employeeHours }} h</strong>
+            <strong v-if="!recordsError">{{ employeeHours }} h</strong>
+            <strong v-else>—</strong>
             <span>recorded hours</span>
           </div>
           <div class="dashboard-progress"><span :style="{ width: `${employeeProgress}%` }"></span></div>
@@ -31,7 +32,8 @@
         <article class="dashboard-card dashboard-records-card">
           <h2>Recent time entries</h2>
           <p>Review your records and manage working-time entries.</p>
-          <div v-if="records.length === 0" class="dashboard-empty">No working-time entries yet.</div>
+          <div v-if="recordsError" class="dashboard-error">{{ recordsError }}</div>
+          <div v-else-if="records.length === 0" class="dashboard-empty">No working-time entries yet.</div>
           <div v-for="record in records.slice(0, 3)" :key="record.id" class="dashboard-row">
             <span>{{ formatDate(record.start) }}</span>
             <strong>{{ duration(record.start, record.end) }}</strong>
@@ -57,10 +59,33 @@
         <article class="dashboard-card dashboard-wide-card">
           <h2>Team snapshot</h2>
           <p>Review assigned members and recorded hours with context.</p>
-          <div v-for="team in teams.slice(0, 4)" :key="team.id" class="dashboard-row">
-            <span>{{ team.name }}</span>
-            <strong>{{ team.users.length }} members</strong>
+          <div v-for="team in teams.slice(0, 4)" :key="team.id" class="team-snapshot-block">
+            <div class="dashboard-row team-snapshot-header">
+              <span>{{ team.name }}</span>
+              <strong>{{ team.users.length }} member{{ team.users.length === 1 ? "" : "s" }}</strong>
+            </div>
+            <ul v-if="team.users.length > 0" class="team-snapshot-members">
+              <li v-for="member in team.users" :key="member.id">
+                <span class="team-snapshot-name">{{ member.username }}</span>
+                <span class="team-snapshot-role">{{ member.role || "—" }}</span>
+              </li>
+            </ul>
+            <p v-else class="team-snapshot-empty">No members yet.</p>
           </div>
+        </article>
+        <article class="dashboard-card dashboard-admin-card">
+          <h2>Create a team</h2>
+          <p>Managers can create teams for their own employees. You will be added as the first member.</p>
+          <p v-if="adminMessage" class="dashboard-feedback">{{ adminMessage }}</p>
+          <form class="dashboard-admin-form" @submit.prevent="createTeam">
+            <label>Team name<input v-model="newTeamName" type="text" required placeholder="Team name"></label>
+            <button class="dashboard-button" type="submit">Create team</button>
+          </form>
+        </article>
+        <article class="dashboard-card dashboard-records-card">
+          <h2>Manage your teams</h2>
+          <p>Add or remove members of the teams you belong to.</p>
+          <RouterLink class="dashboard-button" to="/admin/teams">Browse teams</RouterLink>
         </article>
         <article class="dashboard-card dashboard-records-card">
           <h2>Review queue</h2>
@@ -104,6 +129,23 @@
           <h2>Audit and oversight</h2>
           <p>Reports remain access-scoped and traceable to approved records.</p>
           <RouterLink class="dashboard-button" to="/directory">Review records</RouterLink>
+        </article>
+        <article class="dashboard-card dashboard-records-card">
+          <h2>Organization teams</h2>
+          <p>Browse all teams and members for reporting and auditing.</p>
+          <RouterLink class="dashboard-button" to="/admin/teams">Browse teams</RouterLink>
+        </article>
+        <article class="dashboard-card dashboard-records-card">
+          <h2>Correction requests</h2>
+          <p>Review employee explanations and keep decisions traceable.</p>
+          <div v-if="correctionRequests.length === 0" class="dashboard-empty">No pending requests.</div>
+          <div v-for="request in correctionRequests" :key="request.id" class="dashboard-review-row">
+            <div><strong>{{ request.reason }}</strong><span>Entry #{{ request.working_time_id }}</span></div>
+            <div class="dashboard-review-actions">
+              <button class="dashboard-mini-button" type="button" @click="reviewCorrection(request.id, 'approved')">Approve</button>
+              <button class="dashboard-mini-button dashboard-mini-button-danger" type="button" @click="reviewCorrection(request.id, 'rejected')">Reject</button>
+            </div>
+          </div>
         </article>
       </section>
 
@@ -220,6 +262,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { apiFetch, authState, logout } from "../services/auth";
+import { parseUtc } from "../utils/datetime";
 import AppLayout from "../components/AppLayout.vue";
 import PasswordField from "../components/PasswordField.vue";
 import ShiftEditorModal from "../components/ShiftEditorModal.vue";
@@ -238,6 +281,7 @@ const noteTitle = computed(() => role.value === "employee" ? "A clear promise" :
 const noteText = computed(() => role.value === "employee" ? "Time Manager records working time, not every action on your computer." : "Access is scoped by role, ownership, and team membership.");
 const currentTime = ref("--:--");
 const records = ref([]);
+const recordsError = ref("");
 const teams = ref([]);
 const roles = ref([]);
 const users = ref([]);
@@ -254,7 +298,28 @@ const shiftTarget = ref(null);
 const shiftFeedback = ref("");
 const pickerMode = ref(null); // null | "user" | "team"
 
-const employeeHours = computed(() => records.value.reduce((total, record) => total + durationHours(record.start, record.end), 0).toFixed(1));
+// Total hours worked in the current week (Monday 00:00 → Sunday 23:59:59
+// in browser-local time). Uses the same UTC parsing as the rest of the app.
+const employeeHours = computed(() => {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sunday, 1 = Monday, ...
+  const daysFromMonday = day === 0 ? 6 : day - 1;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysFromMonday);
+  monday.setHours(0, 0, 0, 0);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 7);
+
+  const totalMinutes = records.value.reduce((sum, record) => {
+    const start = parseUtc(record.start);
+    const end = parseUtc(record.end);
+    if (!start || !end) return sum;
+    if (start < monday || start >= sunday) return sum;
+    return sum + Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60000));
+  }, 0);
+
+  return (totalMinutes / 60).toFixed(1);
+});
 const employeeProgress = computed(() => Math.min(100, Math.round((Number(employeeHours.value) / 40) * 100)));
 const weekDays = computed(() => {
   const labels = ["Mon", "Tue", "Wed", "Thu", "Fri"];
@@ -279,10 +344,16 @@ onMounted(async () => {
   const userId = authState.user?.id;
 
   if (role.value === "employee" && userId) {
-    const response = await apiFetch(`/api/workingtime/${userId}`);
-    if (response.ok) {
+    try {
+      const response = await apiFetch(`/api/workingtime/${userId}`);
+      if (!response.ok) {
+        throw new Error(`Failed to load working times (${response.status})`);
+      }
       const payload = await response.json();
       records.value = Array.isArray(payload) ? payload : (payload.data || []);
+    } catch (err) {
+      console.error(err);
+      recordsError.value = err.message || "Unable to load working-time data.";
     }
   }
 
@@ -310,20 +381,30 @@ onMounted(async () => {
   }
 });
 
-// Create a team through the administrator-only API and refresh the dashboard summary.
+// Create a team. The backend allows managers and administrators.
+// Managers are auto-added; admins are not.
 async function createTeam() {
-  const response = await apiFetch("/api/admin/teams", {
+  const response = await apiFetch("/api/teams", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: newTeamName.value })
   });
 
-  adminMessage.value = response.ok ? "Team created." : "Unable to create team.";
+  const body = await response.json().catch(() => ({}));
+
   if (response.ok) {
+    adminMessage.value = "Team created.";
     newTeamName.value = "";
     const teamsResponse = await apiFetch("/api/teams");
     if (teamsResponse.ok) teams.value = await teamsResponse.json();
+  } else {
+    const detail = body.errors
+      ? Object.values(body.errors).flat().join(", ")
+      : (body.error || "Unable to create team.");
+    adminMessage.value = detail;
   }
+
+  setTimeout(() => (adminMessage.value = ""), 3000);
 }
 
 // Promote or demote a user through the administrator-only role endpoint.
@@ -384,7 +465,6 @@ function openTeamShiftPicker() {
   shiftFeedback.value = "";
 }
 
-// Called by the picker when a user/team is chosen.
 function onPickerSelected(item) {
   if (pickerMode.value === "user") {
     shiftTarget.value = {

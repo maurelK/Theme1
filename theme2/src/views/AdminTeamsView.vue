@@ -54,42 +54,65 @@
             <p v-if="actionMessage" class="alert alert-success">{{ actionMessage }}</p>
 
             <!-- Add member -->
-            <div class="add-member-row">
-              <input
-                v-model="addMemberQuery"
-                type="text"
-                class="add-member-input"
-                placeholder="Search a user by name or email"
-              />
-              <button
-                class="btn-wt btn-primary"
-                type="button"
-                :disabled="!selectedUserId || addingMember"
-                @click="addMember"
-              >
-                {{ addingMember ? "Adding..." : "Add member" }}
-              </button>
-            </div>
-
-            <ul v-if="filteredCandidateUsers.length > 0 && addMemberQuery" class="candidate-list">
-              <li v-for="candidate in filteredCandidateUsers" :key="candidate.id">
-                <button type="button" @click="pickCandidate(candidate)">
-                  <span>{{ candidate.username }}</span>
-                  <span class="candidate-email">{{ candidate.email }}</span>
+            <div ref="candidatesRef" class="candidates-wrap">
+              <div class="add-member-row">
+                <input
+                  v-model="addMemberQuery"
+                  type="text"
+                  class="add-member-input"
+                  placeholder="Search a user by name or email"
+                  @focus="addMemberFocused = true"
+                />
+                <button
+                  class="btn-wt btn-primary"
+                  type="button"
+                  :disabled="!selectedUserId || addingMember"
+                  @click="addMember"
+                >
+                  {{ addingMember ? "Adding..." : "Add member" }}
                 </button>
-              </li>
-            </ul>
-            <p v-if="selectedUserId && !addMemberQuery" class="add-member-hint">
-              Selected: <strong>{{ candidateLabel }}</strong>
-              <button type="button" class="link-button" @click="clearCandidate">change</button>
-            </p>
+              </div>
+
+              <p
+                v-if="addMemberFocused && availableUserCount > 0"
+                class="candidate-hint"
+              >
+                Showing {{ filteredCandidateUsers.length }} of
+                {{ availableUserCount }} available user{{ availableUserCount === 1 ? "" : "s" }}.
+                <span v-if="!addMemberQuery">Type to filter.</span>
+              </p>
+
+              <ul
+                v-if="addMemberFocused && filteredCandidateUsers.length > 0"
+                class="candidate-list"
+              >
+                <li v-for="candidate in filteredCandidateUsers" :key="candidate.id">
+                  <button type="button" @mousedown.prevent="pickCandidate(candidate)">
+                    <span>{{ candidate.username }}</span>
+                    <span v-if="candidate.email" class="candidate-email">{{ candidate.email }}</span>
+                  </button>
+                </li>
+              </ul>
+
+              <p
+                v-else-if="addMemberFocused && availableUserCount === 0"
+                class="candidate-hint"
+              >
+                No users available to add.
+              </p>
+
+              <p v-if="selectedUserId && !addMemberFocused" class="add-member-hint">
+                Selected: <strong>{{ candidateLabel }}</strong>
+                <button type="button" class="link-button" @click="clearCandidate">change</button>
+              </p>
+            </div>
 
             <!-- Member list -->
             <ul class="member-list">
               <li v-for="member in selectedTeam.users" :key="member.id">
                 <div>
                   <p class="member-name">{{ member.username }}</p>
-                  <p class="member-email">{{ member.email }}</p>
+                  <p class="member-email">{{ member.email || "—" }}</p>
                 </div>
                 <span class="member-role">{{ member.role || "—" }}</span>
                 <button
@@ -128,6 +151,7 @@ export default {
       filter: "",
       selectedTeamId: null,
       addMemberQuery: "",
+      addMemberFocused: false,
       selectedUserId: null,
       addingMember: false,
       removingMemberId: null,
@@ -147,6 +171,13 @@ export default {
       return this.teams.find((t) => t.id === this.selectedTeamId) || null;
     },
 
+    // Total candidates available (users not already in the selected team).
+    availableUserCount() {
+      if (!this.selectedTeam) return 0;
+      const memberIds = new Set(this.selectedTeam.users.map((u) => u.id));
+      return this.users.filter((u) => !memberIds.has(u.id)).length;
+    },
+
     // Users not already in the selected team, filtered by the query.
     filteredCandidateUsers() {
       if (!this.selectedTeam) return [];
@@ -162,18 +193,23 @@ export default {
             (u.email || "").toLowerCase().includes(q)
           );
         })
-        .slice(0, 8);
+        .slice(0, 20);
     },
 
     candidateLabel() {
       const u = this.users.find((x) => x.id === this.selectedUserId);
-      return u ? `${u.username} (${u.email})` : "";
+      return u ? `${u.username}${u.email ? ` (${u.email})` : ""}` : "";
     }
   },
 
   mounted() {
     this.loadTeams();
     this.loadUsers();
+    document.addEventListener("click", this.onDocumentClick);
+  },
+
+  beforeUnmount() {
+    document.removeEventListener("click", this.onDocumentClick);
   },
 
   methods: {
@@ -196,18 +232,29 @@ export default {
     selectTeam(team) {
       this.selectedTeamId = team.id;
       this.addMemberQuery = "";
+      this.addMemberFocused = false;
       this.selectedUserId = null;
       this.actionError = "";
       this.actionMessage = "";
     },
 
+    // Close the candidate dropdown when clicking outside it.
+    onDocumentClick(e) {
+      const wrap = this.$refs.candidatesRef;
+      if (wrap && !wrap.contains(e.target)) {
+        this.addMemberFocused = false;
+      }
+    },
+
     pickCandidate(user) {
       this.selectedUserId = user.id;
       this.addMemberQuery = "";
+      this.addMemberFocused = false;
     },
 
     clearCandidate() {
       this.selectedUserId = null;
+      this.addMemberFocused = true;
     },
 
     async addMember() {
@@ -217,7 +264,7 @@ export default {
 
       try {
         const res = await apiFetch(
-          `/api/admin/teams/${this.selectedTeamId}/members/${this.selectedUserId}`,
+          `/api/teams/${this.selectedTeamId}/members/${this.selectedUserId}`,
           { method: "POST" }
         );
         if (!res.ok) {
@@ -242,7 +289,7 @@ export default {
 
       try {
         const res = await apiFetch(
-          `/api/admin/teams/${this.selectedTeamId}/members/${member.id}`,
+          `/api/teams/${this.selectedTeamId}/members/${member.id}`,
           { method: "DELETE" }
         );
         if (!res.ok) {
@@ -400,6 +447,10 @@ export default {
   text-transform: uppercase;
 }
 
+.candidates-wrap {
+  position: relative;
+}
+
 .add-member-row {
   display: flex;
   gap: 10px;
@@ -421,13 +472,21 @@ export default {
   border-color: #bd684c;
 }
 
+.candidate-hint {
+  margin: 4px 0 8px;
+  color: #71807a;
+  font-size: 11px;
+  font-family: "DM Mono", monospace;
+  letter-spacing: 0.05em;
+}
+
 .candidate-list {
   list-style: none;
   margin: 0 0 12px;
   padding: 0;
   border: 1px solid #e4e7de;
   background: #fbf9f4;
-  max-height: 180px;
+  max-height: 220px;
   overflow-y: auto;
 }
 
