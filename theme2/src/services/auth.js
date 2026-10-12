@@ -39,7 +39,6 @@ const publicPaths = new Set([
 // Attach cookies and the CSRF header consistently for every API request.
 export async function apiFetch(path, options = {}) {
   const headers = new Headers(options.headers || {});
-  const method = (options.method || "GET").toUpperCase();
 
   if (!publicPaths.has(path) && authState.csrfToken) {
     headers.set("X-CSRF-Token", authState.csrfToken);
@@ -63,28 +62,6 @@ export async function apiFetch(path, options = {}) {
 }
 
 // Restore the browser session after a refresh without reading the JWT.
-// export async function initializeAuth() {
-//   try {
-//     const csrfResponse = await apiFetch("/api/auth/csrf");
-//     if (!csrfResponse.ok) return;
-
-//     const csrfData = await csrfResponse.json();
-//     authState.csrfToken = csrfData.csrf_token;
-
-//     // No token means no session cookie; skip the session call entirely.
-//     if (!authState.csrfToken) return;
-
-//     const sessionResponse = await apiFetch("/api/auth/session");
-//     if (sessionResponse.ok) {
-//       const sessionData = await sessionResponse.json();
-//       authState.user = sessionData.user;
-//     }
-//   } finally {
-//     authState.initialized = true;
-//   }
-// }
-
-// Restore the browser session after a refresh without reading the JWT.
 // If the API is unreachable (offline, network error), the app still starts without a session.
 export async function initializeAuth() {
   try {
@@ -103,7 +80,7 @@ export async function initializeAuth() {
       authState.user = sessionData.user;
     }
   } catch (error) {
-    console.warn("Session non restaurée :", error);
+    console.warn("Session not restored:", error);
   } finally {
     authState.initialized = true;
   }
