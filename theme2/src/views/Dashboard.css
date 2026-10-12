@@ -70,6 +70,60 @@
   margin-top: 16px;
 }
 
+/* Manager Overview: team snapshot with member list */
+.team-snapshot-block {
+  border-top: 1px solid #d4d6cc;
+  padding: 12px 0 14px;
+}
+
+.team-snapshot-block:last-of-type {
+  padding-bottom: 4px;
+}
+
+.team-snapshot-header {
+  border-top: 0;
+  padding: 0 0 8px;
+  min-height: auto;
+}
+
+.team-snapshot-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.team-snapshot-members li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0 6px 12px;
+  border-left: 2px solid #e4e7de;
+  font-size: 12px;
+}
+
+.team-snapshot-name {
+  color: #243332;
+  font-weight: 500;
+}
+
+.team-snapshot-role {
+  color: #71807a;
+  font: 9px "DM Mono", monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.team-snapshot-empty {
+  margin: 0;
+  padding: 4px 0 4px 12px;
+  color: #71807a;
+  font-size: 11px;
+  border-left: 2px solid #e4e7de;
+}
+
 @media (max-width: 760px) {
   .dashboard-hero { padding: 66px 0 42px; }
   .dashboard-note { align-items: flex-start; flex-direction: column; gap: 8px; }

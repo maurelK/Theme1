@@ -57,11 +57,20 @@
           <span>Team groups in scope</span>
         </article>
         <article class="dashboard-card dashboard-wide-card">
-          <h2>Team snapshot</h2>
+ v        <h2>Team snapshot</h2>
           <p>Review assigned members and recorded hours with context.</p>
-          <div v-for="team in teams.slice(0, 4)" :key="team.id" class="dashboard-row">
-            <span>{{ team.name }}</span>
-            <strong>{{ team.users.length }} members</strong>
+          <div v-for="team in teams.slice(0, 4)" :key="team.id" class="team-snapshot-block">
+            <div class="dashboard-row team-snapshot-header">
+              <span>{{ team.name }}</span>
+              <strong>{{ team.users.length }} member{{ team.users.length === 1 ? "" : "s" }}</strong>
+            </div>
+            <ul v-if="team.users.length > 0" class="team-snapshot-members">
+              <li v-for="member in team.users" :key="member.id">
+                <span class="team-snapshot-name">{{ member.username }}</span>
+                <span class="team-snapshot-role">{{ member.role || "—" }}</span>
+              </li>
+            </ul>
+            <p v-else class="team-snapshot-empty">No members yet.</p>
           </div>
         </article>
         <article class="dashboard-card dashboard-records-card">
