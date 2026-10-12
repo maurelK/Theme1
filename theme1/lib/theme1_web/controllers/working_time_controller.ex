@@ -49,25 +49,33 @@ defmodule Theme1Web.WorkingTimeController do
   def index(conn, %{"userID" => user_id} = params) do
     case Integer.parse(to_string(user_id)) do
       {uid, _} ->
-        start_date = params["start"]
-        end_date = params["end"]
+        case authorize_read(conn, uid) do
+          :ok ->
+            start_date = params["start"]
+            end_date = params["end"]
 
-        query = from w in WorkingTime, where: w.user_id == ^uid
+            query = from w in WorkingTime, where: w.user_id == ^uid
 
-        query = if start_date && start_date != "" do
-          from w in query, where: w.start >= ^start_date
-        else
-          query
+            query = if start_date && start_date != "" do
+              from w in query, where: w.start >= ^start_date
+            else
+              query
+            end
+
+            query = if end_date && end_date != "" do
+              from w in query, where: w.end <= ^end_date
+            else
+              query
+            end
+
+            working_times = Repo.all(query)
+            json(conn, %{data: working_times})
+
+          {:error, :forbidden} ->
+            conn
+            |> put_status(:forbidden)
+            |> json(%{error: "You cannot view this user's working times"})
         end
-
-        query = if end_date && end_date != "" do
-          from w in query, where: w.end <= ^end_date
-        else
-          query
-        end
-
-        working_times = Repo.all(query)
-        json(conn, %{data: working_times})
 
       :error ->
         conn
@@ -79,16 +87,24 @@ defmodule Theme1Web.WorkingTimeController do
   def show(conn, %{"userID" => user_id, "id" => id}) do
     case {Integer.parse(to_string(user_id)), Integer.parse(to_string(id))} do
       {{uid, _}, {wt_id, _}} ->
-        working_time = Repo.get_by(WorkingTime, id: wt_id, user_id: uid)
+        case authorize_read(conn, uid) do
+          :ok ->
+            working_time = Repo.get_by(WorkingTime, id: wt_id, user_id: uid)
 
-        case working_time do
-          nil ->
+            case working_time do
+              nil ->
+                conn
+                |> put_status(:not_found)
+                |> json(%{error: "Working time not found"})
+
+              working_time ->
+                json(conn, %{data: working_time})
+            end
+
+          {:error, :forbidden} ->
             conn
-            |> put_status(:not_found)
-            |> json(%{error: "Working time not found"})
-
-          working_time ->
-            json(conn, %{data: working_time})
+            |> put_status(:forbidden)
+            |> json(%{error: "You cannot view this user's working times"})
         end
 
       _ ->
@@ -227,6 +243,32 @@ defmodule Theme1Web.WorkingTimeController do
         {:error, :role_not_allowed}
     end
   end
+
+  # For reads: the caller may read their own records, or those of any user
+  # they cover. HR/payroll and admin can read anyone. Unlike write paths,
+  # out-of-scope reads return 403 rather than 404 — the user ID is already
+  # visible in the URL, so hiding existence has no benefit.
+  defp authorize_read(conn, target_user_id) do
+    case role_name(conn) do
+      role when role in ["administrator", "hr_payroll"] ->
+        :ok
+
+      "manager" ->
+        if Scope.manages_or_owns?(conn.assigns.current_user, target_user_id) do
+          :ok
+        else
+          {:error, :forbidden}
+        end
+
+      _ ->
+        if conn.assigns.current_user.id == target_user_id do
+          :ok
+        else
+          {:error, :forbidden}
+        end
+    end
+  end
+
 
   defp role_name(conn) do
     conn.assigns.current_user.role && conn.assigns.current_user.role.name

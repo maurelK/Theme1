@@ -8,16 +8,22 @@
 
         <section class="main-panel" aria-live="polite">
           <div v-if="user" class="profile-view">
-            <!-- Profile Header -->
-            <div class="profile-header">
-              <div class="avatar">{{ userInitials }}</div>
-              <div>
-                <p class="eyebrow">Your account</p>
-                <h2>{{ user.username }}</h2>
-                <p class="muted">{{ user.email }}</p>
+            <!-- Teams -->
+            <section class="team-card" v-if="myTeams.length > 0">
+              <p class="eyebrow">Your teams</p>
+              <div v-for="team in myTeams" :key="team.id" class="team-block">
+                <h3 class="team-name">{{ team.name }}</h3>
+                <p class="team-members-label">
+                  {{ otherMembers(team).length === 0 ? "No other members" : otherMembers(team).length + " other member" + (otherMembers(team).length === 1 ? "" : "s") }}
+                </p>
+                <ul class="team-members">
+                  <li v-for="member in otherMembers(team)" :key="member.id">
+                    <span class="team-member-name">{{ member.username }}</span>
+                    <span class="team-member-role">{{ member.role || "—" }}</span>
+                  </li>
+                </ul>
               </div>
-              <span class="member-tag">{{ authUser?.role || "employee" }}</span>
-            </div>
+            </section>
 
             <!-- Edit Account Form -->
             <form class="editor" @submit.prevent="updateUser">
@@ -29,10 +35,38 @@
                 <label>Full name<input v-model="editUsername" type="text" placeholder="Full name" required></label>
                 <label>Email address<input v-model="editEmail" type="email" placeholder="name@company.com" required></label>
               </div>
+
+              <p v-if="editError" class="editor-alert editor-alert-error">{{ editError }}</p>
+              <p v-else-if="editSuccess" class="editor-alert editor-alert-success">{{ editSuccess }}</p>
+
               <div class="editor-actions">
-                <button class="button button-primary" type="submit">Save changes<span class="button-arrow" aria-hidden="true">&#8599;</span></button>
+                <button class="button button-primary" type="submit" :disabled="editSaving">
+                  {{ editSaving ? "Saving..." : "Save changes" }}
+                  <span class="button-arrow" aria-hidden="true">&#8599;</span>
+                </button>
               </div>
             </form>
+
+            <!-- Danger zone (employee self-delete) -->
+            <section class="danger-zone">
+              <div>
+                <p class="eyebrow">Danger zone</p>
+                <h3>Delete my account</h3>
+                <p class="muted">
+                  Your account will no longer be able to sign in. Your working-time records
+                  will be preserved for reporting.
+                </p>
+              </div>
+              <button
+                class="danger-button"
+                type="button"
+                :disabled="deletingAccount"
+                @click="confirmSelfDelete"
+              >
+                {{ deletingAccount ? "Deleting..." : "Delete my account" }}
+              </button>
+              <p v-if="deleteError" class="editor-alert editor-alert-error">{{ deleteError }}</p>
+            </section>
 
             <!-- Tabs for own data -->
             <div class="user-dashboard-section" style="margin-top: 36px;">
@@ -47,6 +81,7 @@
               <div class="tab-nav">
                 <button type="button" class="btn-wt" :class="activeTab === 'workingTimes' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'workingTimes'">Working Times</button>
                 <button type="button" class="btn-wt" :class="activeTab === 'clock' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'clock'">Clock Manager</button>
+                <button type="button" class="btn-wt" :class="activeTab === 'charts' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'charts'">Dashboard</button>
               </div>
 
               <div class="tab-content-area">
@@ -127,8 +162,15 @@
                   <label>Full name<input v-model="editUsername" type="text" placeholder="Full name" required></label>
                   <label>Email address<input v-model="editEmail" type="email" placeholder="name@company.com" required></label>
                 </div>
+
+                <p v-if="editError" class="editor-alert editor-alert-error">{{ editError }}</p>
+                <p v-else-if="editSuccess" class="editor-alert editor-alert-success">{{ editSuccess }}</p>
+
                 <div class="editor-actions">
-                  <button class="button button-primary" type="submit">Save changes<span class="button-arrow" aria-hidden="true">&#8599;</span></button>
+                  <button class="button button-primary" type="submit" :disabled="editSaving">
+                    {{ editSaving ? "Saving..." : "Save changes" }}
+                    <span class="button-arrow" aria-hidden="true">&#8599;</span>
+                  </button>
                   <button class="text-button" type="button" @click="deleteUser">Remove account</button>
                 </div>
               </form>
@@ -145,6 +187,7 @@
                 <div class="tab-nav">
                   <button type="button" class="btn-wt" :class="activeTab === 'workingTimes' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'workingTimes'">Working Times</button>
                   <button type="button" class="btn-wt" :class="activeTab === 'clock' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'clock'">Clock Manager</button>
+                  <button type="button" class="btn-wt" :class="activeTab === 'charts' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'charts'">Dashboard</button>
                   <button type="button" class="btn-wt" :class="activeTab === 'create' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'create'">Create Entry</button>
                 </div>
 
@@ -222,8 +265,14 @@ export default {
       inviteError: "",
       editUsername: "",
       editEmail: "",
+      editSaving: false,
+      editError: "",
+      editSuccess: "",
+      deletingAccount: false,
+      deleteError: "",
       activeTab: "workingTimes",
-      allUsers: []
+      allUsers: [],
+      myTeams: []
     };
   },
 
@@ -279,6 +328,7 @@ export default {
       this.user = this.authUser;
       this.editUsername = this.authUser.username;
       this.editEmail = this.authUser.email;
+      this.fetchMyTeams();
     } else {
       this.fetchAllUsers();
     }
@@ -297,6 +347,25 @@ export default {
       } catch (err) {
         console.error(err);
       }
+    },
+
+    // Employees see only their own teams (backend enforces the scope).
+    async fetchMyTeams() {
+      try {
+        const response = await apiFetch("/api/teams");
+        if (response.ok) {
+          const data = await response.json();
+          this.myTeams = Array.isArray(data) ? data : (data.data || []);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    },
+
+    // Other members of the team, excluding the current user.
+    otherMembers(team) {
+      const myId = this.authUser?.id;
+      return (team.users || []).filter(u => u.id !== myId);
     },
 
     async fetchUserById(id) {
@@ -372,22 +441,72 @@ export default {
     },
 
     async updateUser() {
-      const response = await apiFetch(`/api/users/${this.user.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: this.editUsername,
-          email: this.editEmail
-        })
-      });
+      // Client-side validation to avoid the round trip on obvious issues.
+      const trimmedName = (this.editUsername || "").trim();
+      const trimmedEmail = (this.editEmail || "").trim();
 
-      if (!response.ok) {
-        throw new Error("Failed to update user");
+      if (trimmedName.length === 0) {
+        this.editError = "Full name cannot be blank.";
+        this.editSuccess = "";
+        return;
+      }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmedEmail)) {
+        this.editError = "Enter a valid email address.";
+        this.editSuccess = "";
+        return;
       }
 
-      const updated = await response.json();
-      this.selectUser(updated.data || updated);
-      this.fetchAllUsers();
+      this.editSaving = true;
+      this.editError = "";
+      this.editSuccess = "";
+
+      try {
+        const response = await apiFetch(`/api/users/${this.user.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: trimmedName,
+            email: trimmedEmail
+          })
+        });
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          const detail = this.extractError(body) || `Update failed (${response.status})`;
+          throw new Error(detail);
+        }
+
+        const updated = await response.json();
+        this.selectUser(updated.data || updated);
+        this.editSuccess = "Profile updated.";
+        setTimeout(() => (this.editSuccess = ""), 2500);
+        this.fetchAllUsers();
+      } catch (err) {
+        console.error(err);
+        this.editError = err.message || "Unable to update profile.";
+      } finally {
+        this.editSaving = false;
+      }
+    },
+
+    // Extract a user-friendly message from either {errors: {...}} or {error: "..."}.
+    extractError(body) {
+      if (!body) return null;
+
+      if (typeof body.error === "string" && body.error.length > 0) {
+        return body.error;
+      }
+
+      if (body.errors && typeof body.errors === "object") {
+        // Flatten {field: [msg1, msg2], ...} into a single string.
+        const parts = Object.entries(body.errors).flatMap(([field, msgs]) => {
+          const list = Array.isArray(msgs) ? msgs : [msgs];
+          return list.map((m) => `${field}: ${m}`);
+        });
+        return parts.length > 0 ? parts.join(" · ") : null;
+      }
+
+      return null;
     },
 
     async getUser() {
@@ -416,7 +535,8 @@ export default {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete user");
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to delete user");
       }
 
       this.user = null;
@@ -424,6 +544,49 @@ export default {
       this.editUsername = "";
       this.editEmail = "";
       this.fetchAllUsers();
+    },
+
+    // Two-step confirm for the destructive self-delete action.
+    async confirmSelfDelete() {
+      this.deleteError = "";
+
+      const first = window.confirm(
+        "Delete your account?\n\n" +
+        "You will not be able to sign in again. Your working-time records " +
+        "will be preserved for reporting."
+      );
+      if (!first) return;
+
+      const typed = window.prompt(
+        `Type your email to confirm (${this.authUser.email}):`,
+        ""
+      );
+      if (typed === null) return;
+      if (typed.trim().toLowerCase() !== (this.authUser.email || "").toLowerCase()) {
+        this.deleteError = "Email did not match. Account was not deleted.";
+        return;
+      }
+
+      this.deletingAccount = true;
+
+      try {
+        const response = await apiFetch(`/api/users/${this.authUser.id}`, {
+          method: "DELETE"
+        });
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.error || `Delete failed (${response.status})`);
+        }
+
+        // Sign out and bounce to login.
+        await logout();
+        this.$router.push({ name: "Login" });
+      } catch (err) {
+        this.deleteError = err.message || "Unable to delete account.";
+      } finally {
+        this.deletingAccount = false;
+      }
     }
   }
 };

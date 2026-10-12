@@ -7,6 +7,7 @@ defmodule Theme1.User do
     field :email, :string
     field :password_hash, :string
     field :password, :string, virtual: true, redact: true
+    field :deleted_at, :utc_datetime
 
     # Shift configuration. timezone_offset_minutes is a fixed UTC offset
     # (e.g. +60 for CET, +120 for CEST). shift_*_minutes are minutes from
@@ -39,7 +40,8 @@ defmodule Theme1.User do
     |> cast(attrs, [:username, :email])
     |> validate_required([:username, :email])
     |> validate_format(:email, ~r/^[^@\s]+@[^@\s]+\.[^@\s]+$/)
-    |> unique_constraint(:email)
+    # The partial unique index only enforces uniqueness for non-deleted users.
+    |> unique_constraint(:email, name: :users_email_active_index)
   end
 
   # Admin-only: assign timezone and personal shift for a user.
@@ -70,6 +72,18 @@ defmodule Theme1.User do
     |> validate_password_strength()
     |> put_password_hash()
   end
+
+  @doc """
+  Mark a user as deleted. Idempotent: re-deleting is a no-op.
+  """
+  def soft_delete_changeset(%__MODULE__{} = user) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    change(user, %{deleted_at: now})
+  end
+
+  @doc "True when the user has been soft-deleted."
+  def deleted?(%__MODULE__{deleted_at: nil}), do: false
+  def deleted?(%__MODULE__{}), do: true
 
   # Login verifies the supplied password against the stored PBKDF2 hash.
   def valid_password?(%__MODULE__{password_hash: password_hash}, password)

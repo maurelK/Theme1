@@ -8,14 +8,20 @@ defmodule Theme1.Auth do
   def authenticate(email, password) when is_binary(email) and is_binary(password) do
     case Repo.get_by(User, email: email) |> Repo.preload(:role) do
       %User{} = user ->
-        if User.valid_password?(user, password) do
-          csrf_token = random_token()
+        cond do
+          User.deleted?(user) ->
+            # Same error as wrong password — do not reveal account state.
+            {:error, :invalid_credentials}
 
-          with {:ok, jwt, _claims} <- sign_token(user, csrf_token) do
-            {:ok, %{user: public_user(user), jwt: jwt, csrf_token: csrf_token}}
-          end
-        else
-          {:error, :invalid_credentials}
+          User.valid_password?(user, password) ->
+            csrf_token = random_token()
+
+            with {:ok, jwt, _claims} <- sign_token(user, csrf_token) do
+              {:ok, %{user: public_user(user), jwt: jwt, csrf_token: csrf_token}}
+            end
+
+          true ->
+            {:error, :invalid_credentials}
         end
 
       nil ->
@@ -181,7 +187,8 @@ defmodule Theme1.Auth do
 
     with {:ok, claims} <- Joken.verify(token, signer),
          true <- valid_expiration?(claims),
-          %User{} = user <- Repo.get(User, claims["user_id"]) |> Repo.preload(:role) do
+         %User{} = user <- Repo.get(User, claims["user_id"]) |> Repo.preload(:role),
+         false <- User.deleted?(user) do
       {:ok, user, claims}
     else
       _ -> {:error, :invalid_token}

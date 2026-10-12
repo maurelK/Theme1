@@ -1,9 +1,10 @@
 <template>
-  <main class="wt-wrapper">
+  <component :is="layout">
+    <main class="wt-wrapper">
     <!-- Header Section -->
     <header class="wt-header">
       <div class="wt-title-group">
-        <p class="wt-eyebrow">User ID: {{ currentUserId }}</p>
+        <p class="wt-eyebrow">User ID: {{ currentUserId }} · Times shown in {{ tzLabel }}</p>
         <h1>Working Times <em>History</em></h1>
       </div>
       <div class="wt-actions">
@@ -14,7 +15,7 @@
           v-if="canManageEntries"
           type="button"
           class="btn-wt btn-primary"
-          @click="$emit('go-create-entry')"
+          @click="goToCreateEntry"
         >
           <span>+ Create entry</span>
         </button>
@@ -83,7 +84,7 @@
           type="button"
           class="btn-wt btn-primary"
           style="margin-top: 16px;"
-          @click="$emit('go-create-entry')"
+          @click="goToCreateEntry"
         >
           Create first entry
         </button>
@@ -93,8 +94,8 @@
         <thead>
           <tr>
             <th>ID</th>
-            <th>Start (YYYY-MM-DD hh:mm:ss)</th>
-            <th>End (YYYY-MM-DD hh:mm:ss)</th>
+            <th>Start (local)</th>
+            <th>End (local)</th>
             <th>Duration</th>
             <th>Overtime</th>
             <th>Source</th>
@@ -163,19 +164,30 @@
       :working-time="correctionTarget"
       @close="correctionTarget = null"
       @submitted="onCorrectionSubmitted"
-    />
-  </main>
+      />
+    </main>
+  </component>
 </template>
 
 <script>
 import "./WorkingTime.css";
 import { apiFetch, authState } from "../services/auth";
 import CorrectionRequestModal from "./CorrectionRequestModal.vue";
+import AppLayout from "./AppLayout.vue";
+import {
+  parseUtc,
+  formatDateOnly,
+  formatTimeLong,
+  formatDateTimeForDisplay,
+  formatMinutes,
+  localInputToUtc,
+  browserTimezoneLabel
+} from "../utils/datetime";
 
 export default {
   name: "WorkingTimes",
 
-  components: { CorrectionRequestModal },
+  components: { AppLayout, CorrectionRequestModal },
 
   props: {
     userId: {
@@ -192,11 +204,18 @@ export default {
       successMessage: "",
       startDateFilter: "",
       endDateFilter: "",
-      correctionTarget: null
+      correctionTarget: null,
+      tzLabel: browserTimezoneLabel()
     };
   },
 
   computed: {
+    // Wrap with AppLayout only when rendered as a standalone route.
+    // When rendered as a tab inside User.vue, User.vue provides the layout.
+    layout() {
+      return this.$route.name === "WorkingTimes" ? "AppLayout" : "div";
+    },
+
     currentUserId() {
       if (this.userId) return this.userId;
       return this.$route.params.userID || this.$route.params.userid || 1;
@@ -273,37 +292,29 @@ export default {
   },
 
   methods: {
+    // Display UTC ISO strings as browser-local "YYYY-MM-DD HH:MM:SS".
     formatDate(dateStr) {
-      if (!dateStr) return "";
-      const formatted = dateStr.replace("T", " ").substring(0, 19);
-      if (formatted.length === 16) return formatted + ":00";
-      return formatted;
+      return formatDateTimeForDisplay(parseUtc(dateStr));
     },
 
+    // Format minutes as "2h 04m" or "34m".
     formatMinutes(mins) {
-      if (!mins) return "0m";
-      const h = Math.floor(mins / 60);
-      const m = mins % 60;
-      if (h === 0) return `${m}m`;
-      return `${h}h ${String(m).padStart(2, "0")}m`;
+      return formatMinutes(mins);
     },
 
+    // Convert a datetime-local input value to a UTC ISO string.
     formatInputToApi(inputVal) {
-      if (!inputVal) return "";
-      const d = new Date(inputVal);
-      if (isNaN(d.getTime())) return inputVal;
-      const pad = (n) => String(n).padStart(2, "0");
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      return localInputToUtc(inputVal);
     },
 
+    // Duration between two UTC ISO strings.
     getDuration(startStr, endStr) {
-      if (!startStr || !endStr) return "-";
-      const start = new Date(startStr.replace(" ", "T"));
-      const end = new Date(endStr.replace(" ", "T"));
-      const diffMs = end - start;
-      if (isNaN(diffMs) || diffMs < 0) return "-";
-      const mins = Math.floor(diffMs / 60000);
-      return this.formatMinutes(mins);
+      const start = parseUtc(startStr);
+      const end = parseUtc(endStr);
+      if (!start || !end) return "—";
+      const diff = Math.floor((end.getTime() - start.getTime()) / 60000);
+      if (diff <= 0) return "—";
+      return formatMinutes(diff);
     },
 
     async getWorkingTimes() {
@@ -358,6 +369,21 @@ export default {
       } catch (err) {
         console.error(err);
         this.error = err.message || "Unable to delete entry.";
+      }
+    },
+
+    // Notify the parent (User.vue switches tabs) AND fall back to a direct
+    // navigation if we're rendered standalone (no parent listener).
+    goToCreateEntry() {
+      const hasParentHandler =
+        this.$attrs &&
+        (this.$attrs.onGoCreateEntry || this.$attrs["onGo-create-entry"]);
+
+      this.$emit("go-create-entry");
+
+      if (!hasParentHandler) {
+        // Standalone route: navigate to the dedicated create page.
+        this.$router.push(`/workingTime/${this.currentUserId}`);
       }
     },
 

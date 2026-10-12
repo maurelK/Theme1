@@ -2,47 +2,51 @@
   <main class="wt-wrapper">
     <header class="wt-header">
       <div class="wt-title-group">
-        <p class="wt-eyebrow">Utilisateur ID: {{ currentUserId }}</p>
-        <h1>{{ isEditMode ? 'Modifier' : 'Cr&eacute;er' }} un <em>cr&eacute;neau</em></h1>
+        <p class="wt-eyebrow">User ID: {{ currentUserId }}</p>
+        <h1>{{ isEditMode ? 'Edit' : 'Create' }} a <em>working-time entry</em></h1>
       </div>
       <div class="wt-actions">
         <RouterLink :to="`/workingTimes/${currentUserId}`" class="btn-wt btn-outline">
-          <span>&larr; Retour &agrave; la liste</span>
+          <span>&larr; Back to list</span>
         </RouterLink>
       </div>
     </header>
 
     <!-- Feedback Alerts -->
     <div v-if="error" class="wt-alert wt-alert-error">
-      <span>Erreur : {{ error }}</span>
-      <button class="btn-link" @click="error = ''">Fermer</button>
+      <span>Error: {{ error }}</span>
+      <button class="btn-link" @click="error = ''">Close</button>
     </div>
 
     <div v-if="successMessage" class="wt-alert wt-alert-success">
       <span>{{ successMessage }}</span>
-      <button class="btn-link" @click="successMessage = ''">Fermer</button>
+      <button class="btn-link" @click="successMessage = ''">Close</button>
     </div>
 
     <!-- Form Card -->
     <section class="wt-form-card">
       <form @submit.prevent="handleSubmit">
+        <p class="wt-tz-hint">
+          Times are entered and displayed in your browser's timezone ({{ tzLabel }}).
+        </p>
+
         <div class="wt-form-grid">
           <div class="wt-field">
-            <label for="wt-start">Date &amp; Heure de d&eacute;but</label>
-            <input 
-              id="wt-start" 
-              v-model="start" 
-              type="datetime-local" 
+            <label for="wt-start">Start date &amp; time</label>
+            <input
+              id="wt-start"
+              v-model="start"
+              type="datetime-local"
               required
             />
           </div>
 
           <div class="wt-field">
-            <label for="wt-end">Date &amp; Heure de fin</label>
-            <input 
-              id="wt-end" 
-              v-model="end" 
-              type="datetime-local" 
+            <label for="wt-end">End date &amp; time</label>
+            <input
+              id="wt-end"
+              v-model="end"
+              type="datetime-local"
               required
             />
           </div>
@@ -50,42 +54,40 @@
 
         <!-- Calculated Duration Live Preview -->
         <div v-if="start && end" class="wt-preview-box">
-          Dur&eacute;e calcul&eacute;e du cr&eacute;neau : <strong>{{ calculatedDuration }}</strong> 
-          <span style="font-size: 11px; margin-left: 8px; color: #71807a;">
-            (Format API : {{ apiStartFormatted }} &rarr; {{ apiEndFormatted }})
+          Calculated duration: <strong>{{ calculatedDuration }}</strong>
+          <span v-if="apiStartFormatted && apiEndFormatted" class="wt-preview-hint">
+            (submitted as {{ apiStartFormatted }} → {{ apiEndFormatted }} UTC)
           </span>
         </div>
 
         <!-- Action Buttons -->
         <div class="wt-actions" style="margin-top: 24px; justify-content: flex-end;">
-          <!-- Creation Mode -->
-          <button 
-            v-if="!isEditMode" 
-            type="button" 
-            class="btn-wt btn-primary" 
-            :disabled="saving || !start || !end" 
+          <button
+            v-if="!isEditMode"
+            type="button"
+            class="btn-wt btn-primary"
+            :disabled="saving || !start || !end"
             @click="createWorkingTime"
           >
-            <span>{{ saving ? 'Cr&eacute;ation en cours...' : 'Cr&eacute;er le temps de travail' }}</span>
+            <span>{{ saving ? 'Creating...' : 'Create working time' }}</span>
           </button>
 
-          <!-- Edit Mode -->
           <template v-else>
-            <button 
-              type="button" 
-              class="btn-wt btn-primary" 
-              :disabled="saving || !start || !end" 
+            <button
+              type="button"
+              class="btn-wt btn-primary"
+              :disabled="saving || !start || !end"
               @click="updateWorkingTime"
             >
-              <span>{{ saving ? 'Enregistrement...' : 'Mettre &agrave; jour' }}</span>
+              <span>{{ saving ? 'Saving...' : 'Update' }}</span>
             </button>
-            <button 
-              type="button" 
-              class="btn-wt btn-danger" 
-              :disabled="saving" 
+            <button
+              type="button"
+              class="btn-wt btn-danger"
+              :disabled="saving"
               @click="deleteWorkingTime"
             >
-              <span>Supprimer</span>
+              <span>Delete</span>
             </button>
           </template>
         </div>
@@ -96,8 +98,14 @@
 
 <script>
 import "./WorkingTime.css";
-// Route working-time requests through the shared authenticated API helper.
 import { apiFetch } from "../services/auth";
+import {
+  utcToLocalInput,
+  localInputToUtc,
+  minutesBetween,
+  formatMinutes,
+  browserTimezoneLabel
+} from "../utils/datetime";
 
 export default {
   name: "WorkingTime",
@@ -124,7 +132,8 @@ export default {
       saving: false,
       loading: false,
       error: "",
-      successMessage: ""
+      successMessage: "",
+      tzLabel: browserTimezoneLabel()
     };
   },
 
@@ -143,24 +152,26 @@ export default {
       return !!this.currentWorkingTimeId;
     },
 
+    // Convert the local datetime-local values to UTC ISO strings for the API.
     apiStartFormatted() {
-      return this.formatInputToApi(this.start);
+      return localInputToUtc(this.start);
     },
 
     apiEndFormatted() {
-      return this.formatInputToApi(this.end);
+      return localInputToUtc(this.end);
     },
 
     calculatedDuration() {
-      if (!this.start || !this.end) return '-';
-      const startDate = new Date(this.start);
-      const endDate = new Date(this.end);
-      const diffMs = endDate - startDate;
-      if (isNaN(diffMs) || diffMs < 0) return 'Invalide (la fin doit ?tre apr?s le d?but)';
-      const mins = Math.floor(diffMs / 60000);
-      const hrs = Math.floor(mins / 60);
-      const remMins = mins % 60;
-      return `${hrs}h ${remMins > 0 ? remMins + 'm' : '00m'}`;
+      if (!this.start || !this.end) return "—";
+      const startUtc = localInputToUtc(this.start);
+      const endUtc = localInputToUtc(this.end);
+      if (!startUtc || !endUtc) return "Invalid";
+
+      const diff = new Date(endUtc) - new Date(startUtc);
+      if (isNaN(diff) || diff < 0) {
+        return "Invalid (end must be after start)";
+      }
+      return formatMinutes(Math.floor(diff / 60000));
     }
   },
 
@@ -168,13 +179,13 @@ export default {
     workingTimeData: {
       immediate: true,
       handler(newVal) {
-        if (newVal) {
-          this.start = this.formatApiToInput(newVal.start);
-          this.end = this.formatApiToInput(newVal.end);
+        if (newVal && newVal.start) {
+          this.start = utcToLocalInput(newVal.start);
+          this.end = utcToLocalInput(newVal.end);
         }
       }
     },
-    '$route.params': {
+    "$route.params": {
       immediate: true,
       handler() {
         this.fetchExistingWorkingTime();
@@ -187,23 +198,6 @@ export default {
   },
 
   methods: {
-    formatApiToInput(dateStr) {
-      if (!dateStr) return "";
-      const isoStr = dateStr.replace(' ', 'T');
-      const d = new Date(isoStr);
-      if (isNaN(d.getTime())) return "";
-      const pad = (n) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    },
-
-    formatInputToApi(inputVal) {
-      if (!inputVal) return "";
-      const d = new Date(inputVal);
-      if (isNaN(d.getTime())) return inputVal;
-      const pad = (n) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-    },
-
     async fetchExistingWorkingTime() {
       if (!this.isEditMode) return;
       if (this.workingTimeData && this.workingTimeData.start) return;
@@ -212,46 +206,49 @@ export default {
       this.error = "";
 
       try {
-        const response = await apiFetch(`/api/workingtime/${this.currentUserId}/${this.currentWorkingTimeId}`);
+        const response = await apiFetch(
+          `/api/workingtime/${this.currentUserId}/${this.currentWorkingTimeId}`
+        );
+
         if (!response.ok) {
-          const fallbackResp = await apiFetch(`/api/workingtime/${this.currentUserId}`);
-          if (!fallbackResp.ok) throw new Error("Impossible de r?cup?rer les d?tails du cr?neau.");
-          const result = await fallbackResp.json();
+          // Fallback: list and filter
+          const fallback = await apiFetch(`/api/workingtime/${this.currentUserId}`);
+          if (!fallback.ok) throw new Error("Unable to fetch entry details.");
+          const result = await fallback.json();
           const items = result.data || result || [];
-          const match = items.find(item => String(item.id) === String(this.currentWorkingTimeId));
+          const match = items.find(
+            (item) => String(item.id) === String(this.currentWorkingTimeId)
+          );
           if (match) {
-            this.start = this.formatApiToInput(match.start);
-            this.end = this.formatApiToInput(match.end);
+            this.start = utcToLocalInput(match.start);
+            this.end = utcToLocalInput(match.end);
             return;
           }
-          throw new Error("Cr?neau introuvable.");
+          throw new Error("Entry not found.");
         }
 
         const data = await response.json();
         const wt = data.data || data;
-        if (wt) {
-          this.start = this.formatApiToInput(wt.start);
-          this.end = this.formatApiToInput(wt.end);
+        if (wt && wt.start) {
+          this.start = utcToLocalInput(wt.start);
+          this.end = utcToLocalInput(wt.end);
         }
       } catch (err) {
         console.error(err);
-        this.error = err.message || "Erreur lors du chargement des donn?es.";
+        this.error = err.message || "Unable to load entry.";
       } finally {
         this.loading = false;
       }
     },
 
     handleSubmit() {
-      if (this.isEditMode) {
-        this.updateWorkingTime();
-      } else {
-        this.createWorkingTime();
-      }
+      if (this.isEditMode) this.updateWorkingTime();
+      else this.createWorkingTime();
     },
 
     async createWorkingTime() {
       if (!this.start || !this.end) {
-        this.error = "Veuillez renseigner la date de d?but et de fin.";
+        this.error = "Please provide both a start and an end time.";
         return;
       }
 
@@ -262,30 +259,32 @@ export default {
       try {
         const payload = {
           workingtime: {
-            start: this.formatInputToApi(this.start),
-            end: this.formatInputToApi(this.end)
+            start: this.apiStartFormatted,
+            end: this.apiEndFormatted
           }
         };
 
         const response = await apiFetch(`/api/workingtime/${this.currentUserId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
-          const detail = errData.errors?.user_id ? "L'utilisateur sp?cifi? n'existe pas en base de donn?es." : `Code Erreur: ${response.status}`;
-          throw new Error(`?chec de la cr?ation (${detail})`);
+          const detail = errData.errors?.user_id
+            ? "The specified user does not exist."
+            : `Error code: ${response.status}`;
+          throw new Error(`Creation failed (${detail})`);
         }
 
-        this.successMessage = "Temps de travail cr?? avec succ?s !";
+        this.successMessage = "Working time created.";
         setTimeout(() => {
           this.$router.push(`/workingTimes/${this.currentUserId}`);
         }, 800);
       } catch (err) {
         console.error(err);
-        this.error = err.message || "Erreur lors de la cr?ation du temps de travail.";
+        this.error = err.message || "Unable to create working time.";
       } finally {
         this.saving = false;
       }
@@ -294,7 +293,7 @@ export default {
     async updateWorkingTime() {
       if (!this.currentWorkingTimeId) return;
       if (!this.start || !this.end) {
-        this.error = "Veuillez renseigner la date de d?but et de fin.";
+        this.error = "Please provide both a start and an end time.";
         return;
       }
 
@@ -305,28 +304,31 @@ export default {
       try {
         const payload = {
           workingtime: {
-            start: this.formatInputToApi(this.start),
-            end: this.formatInputToApi(this.end)
+            start: this.apiStartFormatted,
+            end: this.apiEndFormatted
           }
         };
 
-        const response = await apiFetch(`/api/workingtime/${this.currentWorkingTimeId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+        const response = await apiFetch(
+          `/api/workingtime/${this.currentWorkingTimeId}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          }
+        );
 
         if (!response.ok) {
-          throw new Error(`?chec de la modification (Status: ${response.status})`);
+          throw new Error(`Update failed (Status: ${response.status})`);
         }
 
-        this.successMessage = "Temps de travail mis ? jour avec succ?s !";
+        this.successMessage = "Working time updated.";
         setTimeout(() => {
           this.$router.push(`/workingTimes/${this.currentUserId}`);
         }, 800);
       } catch (err) {
         console.error(err);
-        this.error = err.message || "Erreur lors de la mise ? jour.";
+        this.error = err.message || "Unable to update working time.";
       } finally {
         this.saving = false;
       }
@@ -334,27 +336,28 @@ export default {
 
     async deleteWorkingTime() {
       if (!this.currentWorkingTimeId) return;
-      if (!confirm("?tes-vous s?r de vouloir supprimer ce temps de travail ?")) return;
+      if (!confirm("Delete this working-time entry?")) return;
 
       this.saving = true;
       this.error = "";
 
       try {
-        const response = await apiFetch(`/api/workingtime/${this.currentWorkingTimeId}`, {
-          method: 'DELETE'
-        });
+        const response = await apiFetch(
+          `/api/workingtime/${this.currentWorkingTimeId}`,
+          { method: "DELETE" }
+        );
 
         if (!response.ok) {
-          throw new Error(`?chec de la suppression (Status: ${response.status})`);
+          throw new Error(`Delete failed (Status: ${response.status})`);
         }
 
-        this.successMessage = "Temps de travail supprim?.";
+        this.successMessage = "Working time deleted.";
         setTimeout(() => {
           this.$router.push(`/workingTimes/${this.currentUserId}`);
         }, 800);
       } catch (err) {
         console.error(err);
-        this.error = err.message || "Erreur lors de la suppression.";
+        this.error = err.message || "Unable to delete working time.";
       } finally {
         this.saving = false;
       }
