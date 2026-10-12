@@ -38,19 +38,23 @@ const router = useRouter();
 
 const roleLabel = computed(() => (authState.user?.role || "workspace").replace("_", " "));
 
-// Administrators see "Workspace"; everyone else sees "Overview".
-const dashboardLabel = computed(() =>
-  authState.user?.role === "administrator" ? "Workspace" : "Overview"
-);
-
 // Employees see "Profile" (their own); other roles see "Directory".
 const directoryLabel = computed(() =>
   authState.user?.role === "employee" ? "Profile" : "Directory"
 );
 
+// Administrators get the administration page; managers and HR get team management.
+const roleLink = computed(() => {
+  const role = authState.user?.role;
+  if (role === "administrator") return { label: "Administration", to: "/admin" };
+  if (role === "manager" || role === "hr_payroll") return { label: "Teams", to: "/admin/teams" };
+  return null;
+});
+
 const navLinks = computed(() => [
-  { label: dashboardLabel.value, to: "/" },
-  { label: directoryLabel.value, to: "/directory" }
+  { label: "Overview", to: "/" },
+  { label: directoryLabel.value, to: "/directory" },
+  ...(roleLink.value ? [roleLink.value] : [])
 ]);
 
 async function signOut() {
