@@ -5,7 +5,7 @@
         <div>
           <p class="eyebrow">Teams</p>
           <h1>Organization <em>teams</em></h1>
-          <p class="lede">Browse teams and their members. Add or remove members inline.</p>
+          <p class="lede">Select a team to manage its members and see its working hours.</p>
         </div>
       </header>
 
@@ -54,7 +54,7 @@
             <p v-if="actionMessage" class="alert alert-success">{{ actionMessage }}</p>
 
             <!-- Add member -->
-            <div ref="candidatesRef" class="candidates-wrap">
+            <div v-if="canManageMembers" ref="candidatesRef" class="candidates-wrap">
               <div class="add-member-row">
                 <input
                   v-model="addMemberQuery"
@@ -112,10 +112,11 @@
               <li v-for="member in selectedTeam.users" :key="member.id">
                 <div>
                   <p class="member-name">{{ member.username }}</p>
-                  <p class="member-email">{{ member.email || "—" }}</p>
+                  <p class="member-email">{{ member.email }}</p>
                 </div>
-                <span class="member-role">{{ member.role || "—" }}</span>
+                <span class="member-role">{{ formatRole(member.role) }}</span>
                 <button
+                  v-if="canManageMembers"
                   class="btn-wt btn-danger small"
                   type="button"
                   :disabled="removingMemberId === member.id"
@@ -128,6 +129,8 @@
                 No members yet.
               </li>
             </ul>
+
+            <TeamHours :teamId="selectedTeam.id" />
           </div>
         </section>
       </div>
@@ -137,12 +140,14 @@
 
 <script>
 import AppLayout from "../components/AppLayout.vue";
-import { apiFetch } from "../services/auth";
+import TeamHours from "../components/TeamHours.vue";
+import { apiFetch, authState } from "../services/auth";
+import { formatRole } from "../utils/roles";
 
 export default {
   name: "AdminTeamsView",
 
-  components: { AppLayout },
+  components: { AppLayout, TeamHours },
 
   data() {
     return {
@@ -161,6 +166,11 @@ export default {
   },
 
   computed: {
+    // HR can read teams but only administrators and managers change membership (enforced by the API too).
+    canManageMembers() {
+      return ["administrator", "manager"].includes(authState.user?.role);
+    },
+
     filteredTeams() {
       const q = this.filter.trim().toLowerCase();
       if (!q) return this.teams;
@@ -213,6 +223,8 @@ export default {
   },
 
   methods: {
+    formatRole,
+
     async loadTeams() {
       const res = await apiFetch("/api/teams");
       if (res.ok) {
