@@ -57,7 +57,7 @@
           <span>Team groups in scope</span>
         </article>
         <article class="dashboard-card dashboard-wide-card">
- v        <h2>Team snapshot</h2>
+          <h2>Team snapshot</h2>
           <p>Review assigned members and recorded hours with context.</p>
           <div v-for="team in teams.slice(0, 4)" :key="team.id" class="team-snapshot-block">
             <div class="dashboard-row team-snapshot-header">
@@ -72,6 +72,20 @@
             </ul>
             <p v-else class="team-snapshot-empty">No members yet.</p>
           </div>
+        </article>
+        <article class="dashboard-card dashboard-admin-card">
+          <h2>Create a team</h2>
+          <p>Managers can create teams for their own employees. You will be added as the first member.</p>
+          <p v-if="adminMessage" class="dashboard-feedback">{{ adminMessage }}</p>
+          <form class="dashboard-admin-form" @submit.prevent="createTeam">
+            <label>Team name<input v-model="newTeamName" type="text" required placeholder="Team name"></label>
+            <button class="dashboard-button" type="submit">Create team</button>
+          </form>
+        </article>
+        <article class="dashboard-card dashboard-records-card">
+          <h2>Manage your teams</h2>
+          <p>Add or remove members of the teams you belong to.</p>
+          <RouterLink class="dashboard-button" to="/admin/teams">Browse teams</RouterLink>
         </article>
         <article class="dashboard-card dashboard-records-card">
           <h2>Review queue</h2>
@@ -115,6 +129,23 @@
           <h2>Audit and oversight</h2>
           <p>Reports remain access-scoped and traceable to approved records.</p>
           <RouterLink class="dashboard-button" to="/directory">Review records</RouterLink>
+        </article>
+        <article class="dashboard-card dashboard-records-card">
+          <h2>Organization teams</h2>
+          <p>Browse all teams and members for reporting and auditing.</p>
+          <RouterLink class="dashboard-button" to="/admin/teams">Browse teams</RouterLink>
+        </article>
+        <article class="dashboard-card dashboard-records-card">
+          <h2>Correction requests</h2>
+          <p>Review employee explanations and keep decisions traceable.</p>
+          <div v-if="correctionRequests.length === 0" class="dashboard-empty">No pending requests.</div>
+          <div v-for="request in correctionRequests" :key="request.id" class="dashboard-review-row">
+            <div><strong>{{ request.reason }}</strong><span>Entry #{{ request.working_time_id }}</span></div>
+            <div class="dashboard-review-actions">
+              <button class="dashboard-mini-button" type="button" @click="reviewCorrection(request.id, 'approved')">Approve</button>
+              <button class="dashboard-mini-button dashboard-mini-button-danger" type="button" @click="reviewCorrection(request.id, 'rejected')">Reject</button>
+            </div>
+          </div>
         </article>
       </section>
 
@@ -272,19 +303,17 @@ const pickerMode = ref(null); // null | "user" | "team"
 const employeeHours = computed(() => {
   const now = new Date();
   const day = now.getDay(); // 0 = Sunday, 1 = Monday, ...
-  // Walk back to Monday. Treat Sunday as day 7 so we compute correctly.
   const daysFromMonday = day === 0 ? 6 : day - 1;
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysFromMonday);
   monday.setHours(0, 0, 0, 0);
 
   const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 7); // next Monday 00:00 = exclusive upper bound
+  sunday.setDate(monday.getDate() + 7);
 
   const totalMinutes = records.value.reduce((sum, record) => {
     const start = parseUtc(record.start);
     const end = parseUtc(record.end);
     if (!start || !end) return sum;
-    // Include the record if its start falls within this week.
     if (start < monday || start >= sunday) return sum;
     return sum + Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60000));
   }, 0);
@@ -314,7 +343,7 @@ onMounted(async () => {
   currentTime.value = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const userId = authState.user?.id;
 
-    if (role.value === "employee" && userId) {
+  if (role.value === "employee" && userId) {
     try {
       const response = await apiFetch(`/api/workingtime/${userId}`);
       if (!response.ok) {
@@ -352,20 +381,30 @@ onMounted(async () => {
   }
 });
 
-// Create a team through the administrator-only API and refresh the dashboard summary.
+// Create a team. The backend allows managers and administrators.
+// Managers are auto-added; admins are not.
 async function createTeam() {
-  const response = await apiFetch("/api/admin/teams", {
+  const response = await apiFetch("/api/teams", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: newTeamName.value })
   });
 
-  adminMessage.value = response.ok ? "Team created." : "Unable to create team.";
+  const body = await response.json().catch(() => ({}));
+
   if (response.ok) {
+    adminMessage.value = "Team created.";
     newTeamName.value = "";
     const teamsResponse = await apiFetch("/api/teams");
     if (teamsResponse.ok) teams.value = await teamsResponse.json();
+  } else {
+    const detail = body.errors
+      ? Object.values(body.errors).flat().join(", ")
+      : (body.error || "Unable to create team.");
+    adminMessage.value = detail;
   }
+
+  setTimeout(() => (adminMessage.value = ""), 3000);
 }
 
 // Promote or demote a user through the administrator-only role endpoint.
@@ -426,7 +465,6 @@ function openTeamShiftPicker() {
   shiftFeedback.value = "";
 }
 
-// Called by the picker when a user/team is chosen.
 function onPickerSelected(item) {
   if (pickerMode.value === "user") {
     shiftTarget.value = {

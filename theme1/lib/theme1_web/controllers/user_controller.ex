@@ -8,13 +8,26 @@ defmodule Theme1Web.UserController do
   alias Theme1.User
 
   def index(conn, params) do
+    role = role_name(conn)
+
     users =
       User
       |> apply_filters(params)
       |> Repo.all()
-      |> Enum.filter(&can_access_user?(conn, &1))
+      |> Repo.preload(:role)
 
-    json(conn, Enum.map(users, &user_json/1))
+    cond do
+      role == "manager" ->
+        # Managers can discover the whole org to add members to their teams,
+        # but they see reduced information (no email) — see public_user/1.
+        # Employees in their own teams still get the full record so the
+        # directory flows continue to work.
+        json(conn, Enum.map(users, &manager_view_json(conn, &1)))
+
+      true ->
+        filtered = Enum.filter(users, &can_access_user?(conn, &1))
+        json(conn, Enum.map(filtered, &user_json/1))
+    end
   end
 
   def create(conn, params) do
@@ -150,6 +163,25 @@ defmodule Theme1Web.UserController do
       email: user.email,
       role: if(Ecto.assoc_loaded?(user.role) && user.role, do: user.role.name, else: nil)
     }
+  end
+
+
+  # Managers get a reduced view of users they don't cover: name and role only,
+  # no email. Users within the manager's own teams get the full record so
+  # existing directory flows still work.
+  defp manager_view_json(conn, user) do
+    full_access? = can_access_user?(conn, user)
+
+    if full_access? do
+      user_json(user)
+    else
+      %{
+        id: user.id,
+        username: user.username,
+        email: nil,
+        role: if(Ecto.assoc_loaded?(user.role) && user.role, do: user.role.name, else: nil)
+      }
+    end
   end
 
   # Enforce ownership for employees and team scope for managers.

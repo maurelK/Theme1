@@ -46,6 +46,12 @@ defmodule Theme1Web.Router do
 
     get "/roles", RoleController, :index
     get "/teams", TeamController, :index
+    # Team creation is allowed for managers and administrators.
+    # The controller enforces the role check.
+    post "/teams", TeamController, :create
+    
+    post "/teams/:teamID/members/:userID", TeamController, :add_member
+    delete "/teams/:teamID/members/:userID", TeamController, :remove_member
   end
 
   # Role promotion and demotion are restricted to administrators.
@@ -56,9 +62,6 @@ defmodule Theme1Web.Router do
     get "/users/:userID/shift", AdminController, :show_user_shift
     put "/users/:userID/shift", AdminController, :update_user_shift
 
-    post "/teams", TeamController, :create
-    post "/teams/:teamID/members/:userID", TeamController, :add_member
-    delete "/teams/:teamID/members/:userID", TeamController, :remove_member
     get "/teams/:teamID/shift", AdminController, :show_team_shift
     put "/teams/:teamID/shift", AdminController, :update_team_shift
   end
