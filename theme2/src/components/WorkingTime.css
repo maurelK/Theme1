@@ -388,3 +388,8 @@
   font: 11px "DM Mono", monospace;
   letter-spacing: 0.04em;
 }
+/* Compact buttons inside table rows. */
+.wt-table-actions .btn-wt { padding: 6px 12px; font-size: 12px; }
+.wt-actions-header { text-align: right; }
+.wt-empty-state .btn-wt { margin-top: 16px; }
+.wt-actions-end { margin-top: 24px; justify-content: flex-end; }

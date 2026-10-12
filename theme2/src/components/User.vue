@@ -42,7 +42,6 @@
               <div class="editor-actions">
                 <button class="button button-primary" type="submit" :disabled="editSaving">
                   {{ editSaving ? "Saving..." : "Save changes" }}
-                  <span class="button-arrow" aria-hidden="true">&#8599;</span>
                 </button>
               </div>
             </form>
@@ -69,8 +68,8 @@
             </section>
 
             <!-- Tabs for own data -->
-            <div class="user-dashboard-section" style="margin-top: 36px;">
-              <div class="section-title" style="margin-bottom: 20px;">
+            <div class="user-dashboard-section">
+              <div class="section-title section-title-spaced">
                 <span class="step-number">02</span>
                 <div>
                   <p class="eyebrow">Time Management &amp; Insights</p>
@@ -79,14 +78,15 @@
               </div>
 
               <div class="tab-nav">
-                <button type="button" class="btn-wt" :class="activeTab === 'workingTimes' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'workingTimes'">Working Times</button>
-                <button type="button" class="btn-wt" :class="activeTab === 'clock' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'clock'">Clock Manager</button>
-                <button type="button" class="btn-wt" :class="activeTab === 'charts' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'charts'">Dashboard</button>
+                <button type="button" class="btn-wt" :class="activeTab === 'workingTimes' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'workingTimes'">Time entries</button>
+                <button type="button" class="btn-wt" :class="activeTab === 'clock' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'clock'">Clock in / out</button>
+                <button type="button" class="btn-wt" :class="activeTab === 'charts' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'charts'">Hours per day and week</button>
               </div>
 
               <div class="tab-content-area">
                 <WorkingTimes v-if="activeTab === 'workingTimes'" :userId="user.id" @go-create-entry="activeTab = 'create'" />
                 <ClockManager v-else-if="activeTab === 'clock'" :userId="user.id" />
+                <ChartManager v-else-if="activeTab === 'charts'" :userId="user.id" />
               </div>
             </div>
           </div>
@@ -120,23 +120,22 @@
                 >
               </div>
               <button class="button button-primary" type="submit">
-                <span>Search directory</span><span class="button-arrow" aria-hidden="true">&#8599;</span>
+                Search directory
               </button>
             </form>
             <p class="helper-text">Enter the user's email address (e.g. axel.ogouchi@epitech.eu).</p>
 
-            <div v-if="allUsers.length > 0" style="margin-top: 24px; border-top: 1px solid #bcc4b8; padding-top: 16px;">
-              <p class="eyebrow" style="font-size: 10px; margin-bottom: 8px;">Recent accounts:</p>
-              <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div v-if="allUsers.length > 0" class="recent-accounts">
+              <p class="eyebrow">Recent accounts</p>
+              <div class="recent-accounts-list">
                 <button 
                   v-for="u in allUsers" 
                   :key="u.id" 
                   type="button" 
-                  class="btn-link" 
-                  style="text-align: left; font-size: 12px; color: #263836; text-decoration: none;"
+                  class="btn-link recent-account"
                   @click="selectUser(u)"
                 >
-                  &bull; <strong>{{ u.username }}</strong> ({{ u.email }})
+                  <strong>{{ u.username }}</strong> ({{ u.email }})
                 </button>
               </div>
             </div>
@@ -169,14 +168,14 @@
                 <div class="editor-actions">
                   <button class="button button-primary" type="submit" :disabled="editSaving">
                     {{ editSaving ? "Saving..." : "Save changes" }}
-                    <span class="button-arrow" aria-hidden="true">&#8599;</span>
                   </button>
-                  <button class="text-button" type="button" @click="deleteUser">Remove account</button>
+                  <button v-if="isAdministrator" class="text-button" type="button" @click="deleteUser">Remove account</button>
                 </div>
+                <p v-if="removeError" class="editor-alert editor-alert-error">{{ removeError }}</p>
               </form>
 
-              <div class="user-dashboard-section" style="margin-top: 36px;">
-                <div class="section-title" style="margin-bottom: 20px;">
+              <div class="user-dashboard-section">
+                <div class="section-title section-title-spaced">
                   <span class="step-number">03</span>
                   <div>
                     <p class="eyebrow">Time Management &amp; Insights</p>
@@ -185,52 +184,34 @@
                 </div>
 
                 <div class="tab-nav">
-                  <button type="button" class="btn-wt" :class="activeTab === 'workingTimes' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'workingTimes'">Working Times</button>
-                  <button type="button" class="btn-wt" :class="activeTab === 'clock' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'clock'">Clock Manager</button>
-                  <button type="button" class="btn-wt" :class="activeTab === 'charts' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'charts'">Dashboard</button>
-                  <button type="button" class="btn-wt" :class="activeTab === 'create' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'create'">Create Entry</button>
+                  <button type="button" class="btn-wt" :class="activeTab === 'workingTimes' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'workingTimes'">Time entries</button>
+                  <button type="button" class="btn-wt" :class="activeTab === 'clock' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'clock'">Clock in / out</button>
+                  <button type="button" class="btn-wt" :class="activeTab === 'charts' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'charts'">Hours per day and week</button>
+                  <button type="button" class="btn-wt" :class="activeTab === 'create' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'create'">New entry</button>
                 </div>
 
                 <div class="tab-content-area">
                   <WorkingTimes v-if="activeTab === 'workingTimes'" :userId="user.id" @go-create-entry="activeTab = 'create'" />
                   <ClockManager v-else-if="activeTab === 'clock'" :userId="user.id" />
+                  <ChartManager v-else-if="activeTab === 'charts'" :userId="user.id" />
                   <WorkingTime v-else-if="activeTab === 'create'" :userId="user.id" />
                 </div>
               </div>
             </div>
 
             <div v-else class="empty-state">
-              <p class="eyebrow">Your directory awaits</p>
+              <p class="eyebrow">No account selected</p>
               <h2>Search or select an account<br>to get started.</h2>
               <p class="muted">The person's working times, clock status, and charts will appear here.</p>
             </div>
 
-            <div v-if="isAdministrator" class="create-panel" style="margin-top: 40px;">
-              <div class="section-title">
-                <div><p class="eyebrow">New entry</p><h3>Invite someone</h3></div>
-              </div>
-              <form class="create-form create-form-invite" @submit.prevent="createUser">
-                <input v-model="newUsername" type="text" placeholder="Full name" aria-label="New user name" required>
-                <input v-model="newEmail" type="email" placeholder="Email address" aria-label="New user email" required>
-                <select v-model="newRole" aria-label="Role" required>
-                  <option v-for="role in assignableRoles" :key="role" :value="role">{{ role }}</option>
-                </select>
-                <button class="button button-secondary" type="submit" :disabled="inviting">
-                  {{ inviting ? "Sending invite..." : "Send invite" }}
-                  <span aria-hidden="true">+</span>
-                </button>
-              </form>
-              <p v-if="inviteMessage" class="helper-text invite-feedback">{{ inviteMessage }}</p>
-              <p v-if="inviteError" class="helper-text invite-error">{{ inviteError }}</p>
-            </div>
+            <p v-if="isAdministrator" class="helper-text">
+              To invite someone, go to <RouterLink to="/admin">Administration</RouterLink>.
+            </p>
           </section>
         </div>
       </template>
 
-      <footer class="footer">
-        <span>Time Manager directory &amp; Working Time System</span>
-        <span>GOTHAM CITY &middot; 2026</span>
-      </footer>
     </main>
   </AppLayout>
 </template>
@@ -239,6 +220,7 @@
 import WorkingTimes from "./WorkingTimes.vue";
 import WorkingTime from "./WorkingTime.vue";
 import ClockManager from "./ClockManager.vue";
+import ChartManager from "./ChartManager.vue";
 import AppLayout from "./AppLayout.vue";
 // Route profile requests through the shared authenticated API helper.
 import { apiFetch, authState, logout } from "../services/auth";
@@ -250,6 +232,7 @@ export default {
     WorkingTimes,
     WorkingTime,
     ClockManager,
+    ChartManager,
     AppLayout
   },
 
@@ -257,12 +240,6 @@ export default {
     return {
       user: null,
       searchEmail: "",
-      newUsername: "",
-      newEmail: "",
-      newRole: "employee",
-      inviting: false,
-      inviteMessage: "",
-      inviteError: "",
       editUsername: "",
       editEmail: "",
       editSaving: false,
@@ -270,6 +247,7 @@ export default {
       editSuccess: "",
       deletingAccount: false,
       deleteError: "",
+      removeError: "",
       activeTab: "workingTimes",
       allUsers: [],
       myTeams: []
@@ -288,13 +266,6 @@ export default {
 
     isEmployee() {
       return this.authUser?.role === "employee";
-    },
-
-    // Roles an administrator can assign directly at invite time. Administrator
-    // is intentionally excluded — promote to admin via the "Save role" control
-    // so privilege escalation is a separate, deliberate action.
-    assignableRoles() {
-      return ["employee", "manager", "hr_payroll"];
     },
 
     userInitials() {
@@ -400,46 +371,6 @@ export default {
       await this.$router.push({ name: "Login" });
     },
 
-    // Send an invitation through the admin-only endpoint. Does not log the new
-    // user in or navigate anywhere — the invited user receives an email link.
-    async createUser() {
-      this.inviting = true;
-      this.inviteMessage = "";
-      this.inviteError = "";
-
-      try {
-        const response = await apiFetch("/api/users", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username: this.newUsername,
-            email: this.newEmail,
-            role: this.newRole
-          })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          const detail = data.errors
-            ? Object.values(data.errors).flat().join(", ")
-            : (data.error || "Unable to send invite");
-          throw new Error(detail);
-        }
-
-        const invited = data.data || data;
-        this.inviteMessage = `Invite sent to ${invited.email}. They will receive a link to set their password.`;
-        this.newUsername = "";
-        this.newEmail = "";
-        this.newRole = "employee";
-        this.fetchAllUsers();
-      } catch (reason) {
-        this.inviteError = reason.message;
-      } finally {
-        this.inviting = false;
-      }
-    },
-
     async updateUser() {
       // Client-side validation to avoid the round trip on obvious issues.
       const trimmedName = (this.editUsername || "").trim();
@@ -529,14 +460,19 @@ export default {
       this.selectUser(users[0]);
     },
 
+    // Only the general manager can remove other accounts; always ask first.
     async deleteUser() {
+      this.removeError = "";
+      if (!window.confirm(`Remove ${this.user.username}'s account? This cannot be undone.`)) return;
+
       const response = await apiFetch(`/api/users/${this.user.id}`, {
         method: "DELETE"
       });
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body.error || "Failed to delete user");
+        this.removeError = body.error || "Unable to remove this account.";
+        return;
       }
 
       this.user = null;
