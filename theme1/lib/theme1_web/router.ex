@@ -46,6 +46,7 @@ defmodule Theme1Web.Router do
 
     get "/roles", RoleController, :index
     get "/teams", TeamController, :index
+    get "/teams/:teamID/working-times", TeamController, :working_times
     # Team creation is allowed for managers and administrators.
     # The controller enforces the role check.
     post "/teams", TeamController, :create
