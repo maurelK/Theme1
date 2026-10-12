@@ -269,8 +269,16 @@ defmodule Theme1Web.CorrectionRequestController do
       response: request.response,
       proposed_start: request.proposed_start,
       proposed_end: request.proposed_end,
-      reviewer_id: request.reviewer_id
+      reviewer_id: request.reviewer_id,
+      # Context for reviewers: who asked, and the entry as it is recorded today.
+      requester_name: loaded(request.requester, & &1.username),
+      current_start: loaded(request.working_time, & &1.start),
+      current_end: loaded(request.working_time, & &1.end)
     }
+  end
+
+  defp loaded(assoc, fun) do
+    if Ecto.assoc_loaded?(assoc) and not is_nil(assoc), do: fun.(assoc), else: nil
   end
 
   # Reviewers can only decide requests about records in their scope.
