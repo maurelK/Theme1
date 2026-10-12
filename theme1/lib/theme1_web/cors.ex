@@ -22,7 +22,7 @@ defmodule Theme1Web.Cors do
         conn
         |> Plug.Conn.put_resp_header("access-control-allow-origin", origin)
         |> Plug.Conn.put_resp_header("access-control-allow-credentials", "true")
-        |> Plug.Conn.put_resp_header("access-control-allow-headers", "content-type, x-csrf-token")
+        |> Plug.Conn.put_resp_header("access-control-allow-headers", "content-type, x-csrf-token, authorization")
         |> Plug.Conn.put_resp_header("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
         |> Plug.Conn.put_resp_header("vary", "Origin")
 

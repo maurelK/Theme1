@@ -1,6 +1,28 @@
 import { reactive } from "vue";
 import { notifyError } from "./feedback";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+
+// The mobile WebView serves the app from another site than the API, so the
+// SameSite=Lax auth cookie is never sent: mobile uses a bearer token instead.
+const isMobile = import.meta.env.MODE === "cordova";
+const MOBILE_TOKEN_KEY = "theme1_mobile_token";
+
+function readMobileToken() {
+  try {
+    return localStorage.getItem(MOBILE_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeMobileToken(token) {
+  try {
+    if (token) localStorage.setItem(MOBILE_TOKEN_KEY, token);
+    else localStorage.removeItem(MOBILE_TOKEN_KEY);
+  } catch {
+    // Storage unavailable: the session simply won't survive an app restart.
+  }
+}
 // Keep the JWT in the HttpOnly cookie and retain only safe session data in memory.
 export const authState = reactive({
   user: null,
@@ -21,6 +43,11 @@ export async function apiFetch(path, options = {}) {
 
   if (!publicPaths.has(path) && authState.csrfToken) {
     headers.set("X-CSRF-Token", authState.csrfToken);
+  }
+
+  const mobileToken = isMobile && readMobileToken();
+  if (mobileToken) {
+    headers.set("Authorization", `Bearer ${mobileToken}`);
   }
 
   try {
@@ -87,7 +114,7 @@ export async function login(credentials) {
   const response = await apiFetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(credentials)
+    body: JSON.stringify(isMobile ? { ...credentials, client: "mobile" } : credentials)
   });
 
   const data = await response.json();
@@ -96,6 +123,7 @@ export async function login(credentials) {
     throw new Error(data.error || "Unable to log in");
   }
 
+  if (isMobile) storeMobileToken(data.token);
   authState.user = data.user;
   authState.csrfToken = data.csrf_token;
   return data.user;
@@ -146,7 +174,11 @@ export async function acceptInvitation(token, newPassword) {
 
 // Clear the server cookie and the in-memory session state together.
 export async function logout() {
-  await apiFetch("/api/auth/logout", { method: "POST" });
+  try {
+    await apiFetch("/api/auth/logout", { method: "POST" });
+  } finally {
+    if (isMobile) storeMobileToken(null);
+  }
   authState.user = null;
   authState.csrfToken = null;
 }
