@@ -2,16 +2,15 @@ defmodule Theme1Web.UserController do
   use Theme1Web, :controller
 
   import Ecto.Query
-  import Ecto.Changeset, only: [foreign_key_constraint: 3, change: 1]
 
-  alias Theme1.Repo
-  alias Theme1.User
+  alias Theme1.{Repo, Role, User}
 
   def index(conn, params) do
     role = role_name(conn)
 
     users =
       User
+      |> where([u], is_nil(u.deleted_at))
       |> apply_filters(params)
       |> Repo.all()
       |> Repo.preload(:role)
@@ -108,33 +107,69 @@ defmodule Theme1Web.UserController do
         end
   end
 
+  # Soft-delete a user account. The row is preserved (working times, clocks,
+  # correction requests stay intact for reporting) but the account can no
+  # longer log in and is hidden from user lists.
+  #
+  # Self-delete is allowed for everyone. Administrators are subject to the
+  # last-admin guard: they cannot delete themselves if they are the only
+  # remaining non-deleted administrator.
   def delete(conn, %{"userID" => user_id}) do
-    case Repo.get(User, user_id) do
+    caller = conn.assigns.current_user
+
+    case Repo.get(User, user_id) |> Repo.preload(:role) do
       nil ->
         conn |> put_status(:not_found) |> json(%{error: "User not found"})
 
-      user ->
-        if can_access_user?(conn, user) do
-            case user
-               |> change()
-               |> foreign_key_constraint(:id, name: :clocks_user_id_fkey)
-               |> Repo.delete() do
-            {:ok, _deleted_user} ->
-              send_resp(conn, :no_content, "")
+      %User{deleted_at: dt} when not is_nil(dt) ->
+        conn |> put_status(:gone) |> json(%{error: "User is already deleted"})
 
-            {:error, changeset} ->
-              conn
-              |> put_status(:conflict)
-              |> json(%{
-                error: "User has dependent records and cannot be deleted. Remove their clocks and working times first.",
-                details: errors_from_changeset(changeset)
-              })
-          end
-        else
-          conn
-          |> put_status(:forbidden)
-          |> json(%{error: "You cannot delete this user"})
+      user ->
+        cond do
+          not can_access_user?(conn, user) ->
+            conn |> put_status(:forbidden) |> json(%{error: "You cannot delete this user"})
+
+          last_admin_deleting_self?(caller, user) ->
+            conn
+            |> put_status(:forbidden)
+            |> json(%{error: "You are the only administrator. Promote another user before deleting your account."})
+
+          true ->
+            case user |> User.soft_delete_changeset() |> Repo.update() do
+              {:ok, _user} -> send_resp(conn, :no_content, "")
+              {:error, changeset} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> json(%{errors: errors_from_changeset(changeset)})
+            end
         end
+    end
+  end
+
+  # True if the caller is the target AND the target is the last active administrator.
+  defp last_admin_deleting_self?(caller, target) do
+    caller.id == target.id and
+      target.role &&
+      target.role.name == "administrator" and
+      active_admin_count() <= 1
+  end
+
+  defp active_admin_count do
+    admin_role_id =
+      case Repo.get_by(Role, name: "administrator") do
+        %Role{id: id} -> id
+        _ -> nil
+      end
+
+    if admin_role_id do
+      Repo.aggregate(
+        from(u in User,
+          where: u.role_id == ^admin_role_id and is_nil(u.deleted_at)
+        ),
+        :count
+      )
+    else
+      0
     end
   end
 

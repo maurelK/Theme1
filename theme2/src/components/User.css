@@ -193,3 +193,48 @@ input::placeholder { color: #9ca79c; }
   background: #d9eae8;
   border-left-color: #287c78;
 }
+
+/* Danger zone (employee self-delete) */
+.danger-zone {
+  margin-top: 40px;
+  padding: 22px;
+  border: 1px solid #d4c5be;
+  background: #f6e6de;
+  display: grid;
+  gap: 14px;
+}
+
+.danger-zone h3 {
+  margin: 4px 0 0;
+  color: #a3614a;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.danger-zone .muted {
+  color: #8a5c4c;
+  margin: 4px 0 0;
+}
+
+.danger-button {
+  justify-self: start;
+  border: 0;
+  padding: 12px 18px;
+  background: #a3614a;
+  color: #fffdf7;
+  font: 700 12px "Manrope", sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.danger-button:hover:not(:disabled) {
+  background: #b5684b;
+}
+
+.danger-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}

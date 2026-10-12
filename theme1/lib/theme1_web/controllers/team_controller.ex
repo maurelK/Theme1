@@ -18,10 +18,10 @@ defmodule Theme1Web.TeamController do
     teams =
       case role do
         r when r in ["administrator", "hr_payroll"] ->
-          Repo.all(Team) |> Repo.preload(users: :role)
+          Repo.all(Team)
+          |> Repo.preload(users: active_users_query())
 
         _ ->
-          # Only teams the user is a member of.
           Repo.all(
             from t in Team,
               join: m in TeamMembership,
@@ -30,7 +30,7 @@ defmodule Theme1Web.TeamController do
               order_by: [asc: t.name],
               distinct: t.id
           )
-          |> Repo.preload(users: :role)
+          |> Repo.preload(users: active_users_query())
       end
 
     json(conn, Enum.map(teams, &team_json/1))
@@ -176,4 +176,10 @@ defmodule Theme1Web.TeamController do
         {:error, :forbidden}
     end
   end
+
+  # Only return non-deleted team members in preloads.
+  defp active_users_query do
+    from u in User, where: is_nil(u.deleted_at), preload: [:role]
+  end
+
 end

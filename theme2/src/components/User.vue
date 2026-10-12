@@ -51,6 +51,27 @@
               </div>
             </form>
 
+            <!-- Danger zone (employee self-delete) -->
+            <section class="danger-zone">
+              <div>
+                <p class="eyebrow">Danger zone</p>
+                <h3>Delete my account</h3>
+                <p class="muted">
+                  Your account will no longer be able to sign in. Your working-time records
+                  will be preserved for reporting.
+                </p>
+              </div>
+              <button
+                class="danger-button"
+                type="button"
+                :disabled="deletingAccount"
+                @click="confirmSelfDelete"
+              >
+                {{ deletingAccount ? "Deleting..." : "Delete my account" }}
+              </button>
+              <p v-if="deleteError" class="editor-alert editor-alert-error">{{ deleteError }}</p>
+            </section>
+
             <!-- Tabs for own data -->
             <div class="user-dashboard-section" style="margin-top: 36px;">
               <div class="section-title" style="margin-bottom: 20px;">
@@ -264,6 +285,8 @@ export default {
       editSaving: false,
       editError: "",
       editSuccess: "",
+      deletingAccount: false,
+      deleteError: "",
       activeTab: "workingTimes",
       allUsers: [],
       myTeams: []
@@ -530,7 +553,8 @@ export default {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete user");
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to delete user");
       }
 
       this.user = null;
@@ -538,6 +562,49 @@ export default {
       this.editUsername = "";
       this.editEmail = "";
       this.fetchAllUsers();
+    },
+
+    // Two-step confirm for the destructive self-delete action.
+    async confirmSelfDelete() {
+      this.deleteError = "";
+
+      const first = window.confirm(
+        "Delete your account?\n\n" +
+        "You will not be able to sign in again. Your working-time records " +
+        "will be preserved for reporting."
+      );
+      if (!first) return;
+
+      const typed = window.prompt(
+        `Type your email to confirm (${this.authUser.email}):`,
+        ""
+      );
+      if (typed === null) return;
+      if (typed.trim().toLowerCase() !== (this.authUser.email || "").toLowerCase()) {
+        this.deleteError = "Email did not match. Account was not deleted.";
+        return;
+      }
+
+      this.deletingAccount = true;
+
+      try {
+        const response = await apiFetch(`/api/users/${this.authUser.id}`, {
+          method: "DELETE"
+        });
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.error || `Delete failed (${response.status})`);
+        }
+
+        // Sign out and bounce to login.
+        await logout();
+        this.$router.push({ name: "Login" });
+      } catch (err) {
+        this.deleteError = err.message || "Unable to delete account.";
+      } finally {
+        this.deletingAccount = false;
+      }
     }
   }
 };
