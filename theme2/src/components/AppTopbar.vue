@@ -21,7 +21,7 @@
       <!-- Desktop actions -->
       <div class="app-actions">
         <span class="app-role">
-          {{ roleLabel }} workspace
+          {{ roleLabel }}
         </span>
         <button class="app-signout" type="button" @click="signOut">Sign out</button>
       </div>
@@ -33,29 +33,13 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { authState, logout } from "../services/auth";
+import { navLinksFor } from "../utils/navigation";
+import { formatRole } from "../utils/roles";
 
 const router = useRouter();
 
-const roleLabel = computed(() => (authState.user?.role || "workspace").replace("_", " "));
-
-// Employees see "Profile" (their own); other roles see "Directory".
-const directoryLabel = computed(() =>
-  authState.user?.role === "employee" ? "Profile" : "Directory"
-);
-
-// Administrators get the administration page; managers and HR get team management.
-const roleLink = computed(() => {
-  const role = authState.user?.role;
-  if (role === "administrator") return { label: "Administration", to: "/admin" };
-  if (role === "manager" || role === "hr_payroll") return { label: "Teams", to: "/admin/teams" };
-  return null;
-});
-
-const navLinks = computed(() => [
-  { label: "Overview", to: "/" },
-  { label: directoryLabel.value, to: "/directory" },
-  ...(roleLink.value ? [roleLink.value] : [])
-]);
+const roleLabel = computed(() => formatRole(authState.user?.role));
+const navLinks = computed(() => navLinksFor(authState.user?.role));
 
 async function signOut() {
   await logout();

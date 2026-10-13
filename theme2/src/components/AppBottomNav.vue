@@ -22,61 +22,12 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { authState, logout } from "../services/auth";
+import { ICONS, navLinksFor } from "../utils/navigation";
 
 const router = useRouter();
 
-const teamsIcon = `
-  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M8 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm8.5 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2 19a6 6 0 0 1 12 0v1H2v-1Zm13.5 1v-1a7.4 7.4 0 0 0-1.6-4.6A5 5 0 0 1 22 18.5V20h-6.5Z"/>
-  </svg>
-`;
-
-const adminIcon = `
-  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Zm0 5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Zm0 12.2a7 7 0 0 1-4.2-3.2c.6-1.4 2.4-2.3 4.2-2.3s3.6.9 4.2 2.3a7 7 0 0 1-4.2 3.2Z"/>
-  </svg>
-`;
-
-// Administrators get the administration page; managers and HR get team management.
-const roleLink = computed(() => {
-  const role = authState.user?.role;
-  if (role === "administrator") return { label: "Admin", to: "/admin", icon: adminIcon };
-  if (role === "manager" || role === "hr_payroll") return { label: "Teams", to: "/admin/teams", icon: teamsIcon };
-  return null;
-});
-
-// Employees see "Profile"; other roles see "Directory".
-const directoryLabel = computed(() =>
-  authState.user?.role === "employee" ? "Profile" : "Directory"
-);
-
-const navLinks = computed(() => [
-  {
-    label: "Overview",
-    to: "/",
-    icon: `
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M3 10.2 12 3l9 7.2V20a1.5 1.5 0 0 1-1.5 1.5h-4.75V14.5h-5.5v7H4.5A1.5 1.5 0 0 1 3 20V10.2Z"/>
-      </svg>
-    `
-  },
-  {
-    label: directoryLabel.value,
-    to: "/directory",
-    icon: `
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3h5A1.5 1.5 0 0 1 12 4.5v15A1.5 1.5 0 0 1 10.5 21h-5A1.5 1.5 0 0 1 4 19.5v-15Zm10 3A1.5 1.5 0 0 1 15.5 6h3A1.5 1.5 0 0 1 20 7.5v12a1.5 1.5 0 0 1-1.5 1.5h-3a1.5 1.5 0 0 1-1.5-1.5v-12Z"/>
-      </svg>
-    `
-  },
-  ...(roleLink.value ? [roleLink.value] : [])
-]);
-
-const signOutIcon = `
-  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M10 3.5a1 1 0 0 1 1 1v9a1 1 0 1 1-2 0v-9a1 1 0 0 1 1-1Zm-4.6 2.3a1 1 0 0 1 .1 1.4A6 6 0 1 0 12 18a6 6 0 0 0 4.5-2.1 1 1 0 1 1 1.5 1.3A8 8 0 1 1 5.3 6.3a1 1 0 0 1 1.4-.1l.7.6Z"/>
-  </svg>
-`;
+const navLinks = computed(() => navLinksFor(authState.user?.role));
+const signOutIcon = ICONS.signOut;
 
 async function signOut() {
   await logout();

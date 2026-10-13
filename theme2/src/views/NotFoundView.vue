@@ -7,8 +7,8 @@
         The page you tried to open isn't here. It may have been moved or the URL is wrong.
       </p>
       <div class="nf-actions">
-        <RouterLink class="btn-wt btn-primary" to="/">Go to dashboard</RouterLink>
-        <RouterLink class="btn-wt btn-outline" to="/directory">Open directory</RouterLink>
+        <RouterLink class="btn-wt btn-primary" to="/">Go to home</RouterLink>
+        <RouterLink class="btn-wt btn-outline" to="/my-time">Open my time</RouterLink>
       </div>
     </main>
   </AppLayout>

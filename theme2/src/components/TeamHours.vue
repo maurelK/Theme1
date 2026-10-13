@@ -52,7 +52,7 @@
           </tbody>
         </table>
 
-        <div v-if="allWorkingTimes.length > 0" class="chart-grid team-hours-charts">
+        <div v-if="!isMobileApp && allWorkingTimes.length > 0" class="chart-grid team-hours-charts">
           <article class="chart-card chart-card-wide"><WorkingHoursBarChart :workingTimes="allWorkingTimes" /></article>
           <article class="chart-card chart-card-wide"><WorkingHoursLineChart :workingTimes="allWorkingTimes" /></article>
         </div>
@@ -65,6 +65,7 @@
 import WorkingHoursBarChart from "./WorkingHoursBarChart.vue";
 import WorkingHoursLineChart from "./WorkingHoursLineChart.vue";
 import { apiFetch } from "../services/auth";
+import { isMobileApp } from "../utils/platform";
 import { parseUtc } from "../utils/datetime";
 import { hoursByDay, hoursByWeek, localDateKey } from "../utils/workingHours";
 
@@ -93,7 +94,9 @@ export default {
       startDate: defaultStart(),
       endDate: localDateKey(new Date()),
       loading: false,
-      error: ""
+      error: "",
+      // Charts are web-only; the averages and table stay on mobile.
+      isMobileApp
     };
   },
 

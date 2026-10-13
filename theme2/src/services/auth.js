@@ -1,10 +1,11 @@
 import { reactive } from "vue";
 import { notifyError } from "./feedback";
+import { isMobileApp } from "../utils/platform";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 // The mobile WebView serves the app from another site than the API, so the
 // SameSite=Lax auth cookie is never sent: mobile uses a bearer token instead.
-const isMobile = import.meta.env.MODE === "cordova";
+const isMobile = isMobileApp;
 const MOBILE_TOKEN_KEY = "theme1_mobile_token";
 
 function readMobileToken() {
