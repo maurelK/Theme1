@@ -48,6 +48,19 @@ defmodule Theme1Web.CorrectionRequestController do
   @doc """
   Lists pending correction requests for reviewers.
   """
+  # The caller's own requests, every status, newest first, so they can follow up.
+  def mine(conn, _params) do
+    requests =
+      from(request in CorrectionRequest,
+        where: request.requester_id == ^conn.assigns.current_user.id,
+        order_by: [desc: request.inserted_at],
+        preload: [:requester, :working_time]
+      )
+      |> Repo.all()
+
+    json(conn, %{data: Enum.map(requests, &request_json/1)})
+  end
+
   def index(conn, _params) do
     role = conn.assigns.current_user.role && conn.assigns.current_user.role.name
 
@@ -270,6 +283,7 @@ defmodule Theme1Web.CorrectionRequestController do
       proposed_start: request.proposed_start,
       proposed_end: request.proposed_end,
       reviewer_id: request.reviewer_id,
+      submitted_at: request.inserted_at,
       # Context for reviewers: who asked, and the entry as it is recorded today.
       requester_name: loaded(request.requester, & &1.username),
       current_start: loaded(request.working_time, & &1.start),
