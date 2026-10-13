@@ -34,10 +34,6 @@
 .dashboard-admin-form label { flex: 1; }
 .dashboard-admin-form select { width: 100%; border: 0; border-bottom: 1px solid #bcc4b8; background: transparent; color: #263836; padding: 12px 0; }
 .dashboard-feedback { color: #287c78 !important; font-weight: 700; }
-.dashboard-password-card { display: grid; grid-template-columns: .8fr 1.6fr; gap: 22px; align-items: end; margin-top:22px; padding: 23px; border: 1px solid #d4d6cc; background: #e4e7de; }
-.dashboard-password-card h2 { margin: 0 0 8px; color: #243332; font-size: 20px; letter-spacing: -.04em; }
-.dashboard-password-card p { margin-bottom: 0; color: #71807a; font-size: 12px; line-height: 1.55; }
-.dashboard-password-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 18px; align-items: end; }
 .dashboard-row { min-height: 38px; padding: 8px 0; border-top: 1px solid #d4d6cc; color: #71807a; font-size: 12px; }
 .dashboard-row strong { color: #243332; font-weight: 600; }
 .dashboard-review-row { display: flex; justify-content: space-between; gap: 18px; align-items: center; padding: 13px 0; border-top: 1px solid #d4d6cc; }
@@ -129,7 +125,6 @@
   .dashboard-records-card { grid-column: auto; }
   .dashboard-admin-card { grid-column: auto; }
   .dashboard-admin-form { align-items: stretch; flex-direction: column; }
-  .dashboard-password-card, .dashboard-password-form { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 480px) {

@@ -16,8 +16,8 @@
         <article class="dashboard-card dashboard-clock-card">
           <p class="dashboard-eyebrow">Current time</p>
           <strong class="dashboard-time">{{ currentTime }}</strong>
-          <p>Clock in and out from your profile.</p>
-          <RouterLink class="dashboard-button" to="/directory">Open my profile</RouterLink>
+          <p>Clock in and out from My time.</p>
+          <RouterLink class="dashboard-button" to="/my-time">Open my time</RouterLink>
         </article>
         <article class="dashboard-card dashboard-wide-card">
           <p class="dashboard-eyebrow">This week, Monday to Sunday</p>
@@ -173,23 +173,6 @@
         </article>
       </section>
 
-      <section class="dashboard-password-card">
-        <div>
-          <p class="dashboard-eyebrow">Account security</p>
-          <h2>Change password</h2>
-        </div>
-        <form class="dashboard-password-form" @submit.prevent="changePassword">
-          <input v-model="currentPassword" type="password" placeholder="Current password" autocomplete="current-password" required>
-          <PasswordField
-            v-model="newPassword"
-            label="New password"
-            input-id="dashboard-new-password"
-            autocomplete="new-password"
-          />
-          <button class="dashboard-button" type="submit">Update password</button>
-        </form>
-        <p v-if="passwordMessage" class="dashboard-feedback">{{ passwordMessage }}</p>
-      </section>
     </main>
   </AppLayout>
 </template>
@@ -197,9 +180,8 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { apiFetch, authState } from "../services/auth";
-import { parseUtc } from "../utils/datetime";
+import { formatRange, parseUtc } from "../utils/datetime";
 import AppLayout from "../components/AppLayout.vue";
-import PasswordField from "../components/PasswordField.vue";
 import { formatRole } from "../utils/roles";
 import "./Dashboard.css";
 
@@ -229,9 +211,6 @@ const teams = ref([]);
 const users = ref([]);
 const newTeamName = ref("");
 const adminMessage = ref("");
-const currentPassword = ref("");
-const newPassword = ref("");
-const passwordMessage = ref("");
 const correctionRequests = ref([]);
 
 // Entries started in the current week (Monday 00:00 to next Monday 00:00, browser-local time).
@@ -335,21 +314,6 @@ async function createTeam() {
   setTimeout(() => (adminMessage.value = ""), 3000);
 }
 
-// Submit password changes through the CSRF-protected authentication endpoint.
-async function changePassword() {
-  const response = await apiFetch("/api/auth/password", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ current_password: currentPassword.value, new_password: newPassword.value })
-  });
-
-  passwordMessage.value = response.ok ? "Password updated." : "Unable to update password.";
-  if (response.ok) {
-    currentPassword.value = "";
-    newPassword.value = "";
-  }
-}
-
 // Reviewers approve or reject requests without exposing the JWT to the browser.
 async function reviewCorrection(id, status) {
   const response = await apiFetch(`/api/reviews/correction-requests/${id}`, {
@@ -372,18 +336,6 @@ function durationHours(start, end) {
 
 function duration(start, end) {
   return parseUtc(end) ? `${durationHours(start, end).toFixed(1)} h` : "In progress";
-}
-
-// "12/10/2026 09:00 - 17:30", or both dates when the range spans midnight.
-function formatRange(start, end) {
-  const startDate = parseUtc(start);
-  if (!startDate) return "Unknown";
-  const time = (date) => date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const endDate = parseUtc(end);
-  const startText = `${startDate.toLocaleDateString()} ${time(startDate)}`;
-  if (!endDate) return `${startText} - in progress`;
-  const sameDay = startDate.toDateString() === endDate.toDateString();
-  return `${startText} - ${sameDay ? "" : `${endDate.toLocaleDateString()} `}${time(endDate)}`;
 }
 
 function formatDate(value) {
