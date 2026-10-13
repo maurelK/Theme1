@@ -6,6 +6,7 @@
       v-if="chartData.labels.length > 0"
       :data="chartData"
       :options="chartOptions"
+      aria-label="Working hours per day. Detailed values are in the Hours per day table below."
     />
 
     <p v-else>No working time data available.</p>
