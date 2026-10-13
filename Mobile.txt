@@ -1,0 +1,28 @@
+Le backend tourne dans Docker Desktop sur ton PC (theme1-dev-backend-1), et le port 4000 est ouvert sur le PC lui-même. Il faut donc l'IP Wi-Fi de ton PC : 10.139.91.177.
+
+N'utilise pas les autres adresses que montre ta machine :
+
+172.19.80.1 et 172.27.80.1 sont des réseaux virtuels internes à Windows (WSL et Hyper-V), qu'un téléphone ne peut pas joindre.
+Les adresses en 169.254.x.x ne sont pas utilisables non plus.
+Voici les modifs, que je n'ai pas encore appliquées :
+
+
+# theme2/.env.cordova
+VITE_API_BASE_URL=http://10.139.91.177:4000
+
+<!-- mobile/config.xml -->
+<access origin="http://10.139.91.177:4000" />
+<allow-navigation href="http://10.139.91.177:4000/*" />
+Ensuite, relance npm run android avec le téléphone branché.
+
+Trois conditions pour que ça marche :
+
+Même Wi-Fi : le téléphone doit être sur le même réseau que le PC.
+Pare-feu Windows : il doit laisser passer le port 4000 en entrant.
+Réseau partagé : une adresse en 10.139.x.x ressemble à un réseau d'école ou d'entreprise. Ces réseaux bloquent souvent les échanges directs entre appareils. Dans ce cas, utilise le partage de connexion du téléphone pour le PC, ou un tunnel comme ngrok ou cloudflared.
+Autre point : cette IP change quand tu changes de réseau, et il faudra alors refaire le build.
+
+Si le backend tourne sur une VM distante
+Si tu parles de ta VM (par exemple le déploiement Oracle mentionné dans auth_controller.ex), mets son IP publique à la place. Ça marche alors depuis n'importe quel réseau, sans contrainte de Wi-Fi ni de pare-feu local. Il faut quand même que le port 4000, ou le port exposé, soit ouvert dans les règles réseau de la VM.
+
+Dis-moi laquelle des deux tu vises et j'applique les modifs.

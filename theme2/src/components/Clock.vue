@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { apiFetch } from "../services/auth";
-import { notifyClockIn, notifyClockOut, notifyError } from "../services/feedback";
+import { notifyClockIn, notifyClockOut, notifyError, unlockAudio } from "../services/feedback";
 import { parseUtc, formatTimeShort, formatMinutes } from "../utils/datetime";
 
 const props = defineProps({
@@ -98,6 +98,8 @@ async function loadStatus() {
 
 async function toggle() {
   if (!userId.value) return;
+  // Must run before the first await so the confirmation sound is allowed to play.
+  unlockAudio();
   loading.value = true;
   error.value = "";
   lastAction.value = "";
@@ -180,8 +182,9 @@ onBeforeUnmount(() => {
         {{ loading ? "Working..." : clockedIn ? "Clock Out" : "Clock In" }}
       </button>
 
-      <p v-if="error" class="clock-alert clock-alert-error">{{ error }}</p>
-      <p v-else-if="lastAction" class="clock-alert clock-alert-success">{{ lastAction }}</p>
+      <!-- Announced to screen readers, as the spoken counterpart of the clock sounds. -->
+      <p v-if="error" class="clock-alert clock-alert-error" role="alert">{{ error }}</p>
+      <p v-else-if="lastAction" class="clock-alert clock-alert-success" role="status">{{ lastAction }}</p>
     </div>
   </main>
 </template>
