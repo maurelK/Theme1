@@ -240,3 +240,11 @@ input::placeholder { color: #9ca79c; }
 .recent-accounts .eyebrow { margin-bottom: 8px; }
 .recent-accounts-list { display: flex; flex-direction: column; gap: 6px; }
 .recent-account { color: #263836; font-size: 13px; text-align: left; text-decoration: none; }
+
+/* Directory: the selected user's workspace spans the full page width below the grid. */
+.workspace-full { margin-top: 48px; padding-top: 32px; border-top: 1px solid #d4d6cc; }
+.tab-content-area { min-width: 0; }
+
+/* Charts rendered inside a tab: drop the standalone page spacing and shrink the heading. */
+.tab-content-area .chart-page { padding: 24px 0 0; background: transparent; }
+.tab-content-area .chart-hero h1 { font-size: clamp(28px, 4vw, 40px); }
