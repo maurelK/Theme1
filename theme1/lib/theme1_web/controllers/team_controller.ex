@@ -143,6 +143,70 @@ defmodule Theme1Web.TeamController do
     end
   end
 
+  # Working times of every active member of a team, for team averages.
+  # Optional ?start=YYYY-MM-DD&end=YYYY-MM-DD bounds the entry start date (inclusive).
+  # Aggregation is left to the client so days and weeks follow the viewer's timezone.
+  def working_times(conn, %{"teamID" => team_id} = params) do
+    with {id, ""} <- Integer.parse(to_string(team_id)),
+         %Team{} = team <- Repo.get(Team, id),
+         :ok <- authorize_team_read(conn, team),
+         {:ok, range} <- parse_range(params) do
+      team = Repo.preload(team, users: active_users_query())
+      member_ids = Enum.map(team.users, & &1.id)
+
+      entries =
+        from(w in Theme1.WorkingTime, where: w.user_id in ^member_ids, order_by: [asc: w.start])
+        |> filter_range(range)
+        |> Repo.all()
+        |> Enum.group_by(& &1.user_id)
+
+      members =
+        Enum.map(team.users, fn user ->
+          %{id: user.id, username: user.username, working_times: Map.get(entries, user.id, [])}
+        end)
+
+      json(conn, %{data: %{team: %{id: team.id, name: team.name}, members: members}})
+    else
+      nil -> conn |> put_status(:not_found) |> json(%{error: "Team not found"})
+      {:error, :forbidden} -> conn |> put_status(:forbidden) |> json(%{error: "You cannot view this team"})
+      {:error, :invalid_date} -> conn |> put_status(:bad_request) |> json(%{error: "Dates must be YYYY-MM-DD"})
+      _ -> conn |> put_status(:bad_request) |> json(%{error: "Invalid team ID"})
+    end
+  end
+
+  # HR can read every team; managing rights imply reading rights.
+  defp authorize_team_read(conn, team) do
+    if role_name(conn) == "hr_payroll", do: :ok, else: authorize_team_manage(conn, team)
+  end
+
+  defp parse_range(params) do
+    with {:ok, from_date} <- parse_date(params["start"]),
+         {:ok, to_date} <- parse_date(params["end"]) do
+      {:ok, {from_date, to_date}}
+    end
+  end
+
+  defp parse_date(value) when value in [nil, ""], do: {:ok, nil}
+
+  defp parse_date(value) do
+    case Date.from_iso8601(value) do
+      {:ok, date} -> {:ok, date}
+      _ -> {:error, :invalid_date}
+    end
+  end
+
+  # Widen by a day on each side: the client re-filters on its own local dates.
+  defp filter_range(query, {from_date, to_date}) do
+    query =
+      if from_date,
+        do: where(query, [w], w.start >= ^DateTime.new!(Date.add(from_date, -1), ~T[00:00:00], "Etc/UTC")),
+        else: query
+
+    if to_date,
+      do: where(query, [w], w.start < ^DateTime.new!(Date.add(to_date, 2), ~T[00:00:00], "Etc/UTC")),
+      else: query
+  end
+
   defp team_json(team) do
     # Newly created teams do not have a preloaded users association yet.
     users = if Ecto.assoc_loaded?(team.users), do: Enum.map(team.users, &Theme1.Auth.public_user/1), else: []

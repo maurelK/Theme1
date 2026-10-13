@@ -126,7 +126,8 @@ defmodule Theme1Web.UserController do
 
       user ->
         cond do
-          not can_access_user?(conn, user) ->
+          # Users may delete their own account; only the general manager deletes others.
+          caller.id != user.id and not administrator?(conn) ->
             conn |> put_status(:forbidden) |> json(%{error: "You cannot delete this user"})
 
           last_admin_deleting_self?(caller, user) ->

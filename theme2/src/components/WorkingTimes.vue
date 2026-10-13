@@ -4,7 +4,7 @@
     <!-- Header Section -->
     <header class="wt-header">
       <div class="wt-title-group">
-        <p class="wt-eyebrow">User ID: {{ currentUserId }} · Times shown in {{ tzLabel }}</p>
+        <p class="wt-eyebrow">Times shown in {{ tzLabel }}</p>
         <h1>Working Times <em>History</em></h1>
       </div>
       <div class="wt-actions">
@@ -83,7 +83,6 @@
           v-if="canManageEntries"
           type="button"
           class="btn-wt btn-primary"
-          style="margin-top: 16px;"
           @click="goToCreateEntry"
         >
           Create first entry
@@ -99,7 +98,7 @@
             <th>Duration</th>
             <th>Overtime</th>
             <th>Source</th>
-            <th style="text-align: right;">Actions</th>
+            <th class="wt-actions-header">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -131,14 +130,12 @@
                   v-if="canManageEntries"
                   :to="`/workingTime/${currentUserId}/${wt.id}`"
                   class="btn-wt btn-secondary"
-                  style="padding: 6px 12px; font-size: 11px;"
                 >
                   Edit
                 </RouterLink>
                 <button
                   v-if="canRequestCorrection"
                   class="btn-wt btn-secondary"
-                  style="padding: 6px 12px; font-size: 11px;"
                   @click="openCorrection(wt)"
                 >
                   Request correction
@@ -146,7 +143,6 @@
                 <button
                   v-if="canManageEntries"
                   class="btn-wt btn-danger"
-                  style="padding: 6px 12px; font-size: 11px;"
                   @click="deleteWorkingTime(wt.id)"
                 >
                   Delete

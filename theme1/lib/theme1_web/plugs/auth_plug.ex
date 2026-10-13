@@ -8,21 +8,38 @@ defmodule Theme1Web.AuthPlug do
   # Allow Phoenix to initialize this plug when it builds the router pipeline.
   def init(opts), do: opts
 
-  # Authenticate every protected API request from the HttpOnly JWT cookie.
+  # Authenticate every protected API request from the HttpOnly JWT cookie (web)
+  # or the Authorization bearer header (mobile app, where cross-site cookies are not sent).
   def call(conn, _opts) do
-    conn
-    |> fetch_cookies()
-    |> authenticate_cookie()
+    conn = fetch_cookies(conn)
+
+    case token_from_conn(conn) do
+      nil -> unauthorized(conn, "Authentication required")
+      token -> authenticate_token(conn, token)
+    end
   end
 
-  defp authenticate_cookie(%Plug.Conn{cookies: %{@auth_cookie => token}} = conn) do
+  # The cookie wins when both are present, so the web flow is unchanged.
+  def token_from_conn(conn) do
+    case conn.cookies[@auth_cookie] do
+      token when is_binary(token) -> token
+      _ -> bearer_token(conn)
+    end
+  end
+
+  defp bearer_token(conn) do
+    case get_req_header(conn, "authorization") do
+      ["Bearer " <> token | _] when token != "" -> token
+      _ -> nil
+    end
+  end
+
+  defp authenticate_token(conn, token) do
     case Auth.verify_token(token) do
       {:ok, user, claims} -> validate_csrf(conn, user, claims)
       {:error, _reason} -> unauthorized(conn, "Invalid or expired authentication")
     end
   end
-
-  defp authenticate_cookie(conn), do: unauthorized(conn, "Authentication required")
 
   # Bind the request header to the CSRF claim carried by the signed JWT.
   defp validate_csrf(conn, user, %{"csrf_token" => expected_token}) do

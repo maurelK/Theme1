@@ -4,12 +4,17 @@ defmodule Theme1Web.AuthController do
   alias Theme1.Auth
 
   # Issue an HttpOnly JWT cookie and return only the CSRF token to the browser.
-  def login(conn, %{"email" => email, "password" => password}) do
+  # The mobile app (client: "mobile") cannot use the cross-site cookie, so it also
+  # receives the JWT to send back as an Authorization bearer header.
+  def login(conn, %{"email" => email, "password" => password} = params) do
     case Auth.authenticate(email, password) do
       {:ok, %{user: user, jwt: jwt, csrf_token: csrf_token}} ->
+        body = %{user: user, csrf_token: csrf_token}
+        body = if params["client"] == "mobile", do: Map.put(body, :token, jwt), else: body
+
         conn
         |> put_auth_cookie(jwt)
-        |> json(%{user: user, csrf_token: csrf_token})
+        |> json(body)
 
       {:error, :invalid_credentials} ->
         conn
@@ -92,9 +97,9 @@ defmodule Theme1Web.AuthController do
     # Report the caller's CSRF state. Anonymous visitors receive a null token
   # instead of a 401 so the frontend can bootstrap without treating this as an error.
   def csrf(conn, _params) do
-    conn = fetch_cookies(conn)
+    token = conn |> fetch_cookies() |> Theme1Web.AuthPlug.token_from_conn()
 
-    case conn.cookies["theme1_auth"] && Auth.csrf_token_from_jwt(conn.cookies["theme1_auth"]) do
+    case token && Auth.csrf_token_from_jwt(token) do
       {:ok, csrf_token} -> json(conn, %{csrf_token: csrf_token})
       _ -> json(conn, %{csrf_token: nil})
     end

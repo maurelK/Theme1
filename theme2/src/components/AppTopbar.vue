@@ -2,8 +2,7 @@
   <header class="app-topbar">
     <div class="app-topbar-inner">
       <RouterLink class="app-brand" to="/" aria-label="Time Manager home">
-        <span class="app-brand-mark">t</span>
-        <span>timemanager</span>
+        <span>Time manager</span>
       </RouterLink>
 
       <!-- Desktop inline nav -->
@@ -22,7 +21,7 @@
       <!-- Desktop actions -->
       <div class="app-actions">
         <span class="app-role">
-          {{ roleLabel }} workspace <span class="status-dot"></span>
+          {{ roleLabel }}
         </span>
         <button class="app-signout" type="button" @click="signOut">Sign out</button>
       </div>
@@ -34,25 +33,13 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { authState, logout } from "../services/auth";
+import { navLinksFor } from "../utils/navigation";
+import { formatRole } from "../utils/roles";
 
 const router = useRouter();
 
-const roleLabel = computed(() => (authState.user?.role || "workspace").replace("_", " "));
-
-// Administrators see "Workspace"; everyone else sees "Overview".
-const dashboardLabel = computed(() =>
-  authState.user?.role === "administrator" ? "Workspace" : "Overview"
-);
-
-// Employees see "Profile" (their own); other roles see "Directory".
-const directoryLabel = computed(() =>
-  authState.user?.role === "employee" ? "Profile" : "Directory"
-);
-
-const navLinks = computed(() => [
-  { label: dashboardLabel.value, to: "/" },
-  { label: directoryLabel.value, to: "/directory" }
-]);
+const roleLabel = computed(() => formatRole(authState.user?.role));
+const navLinks = computed(() => navLinksFor(authState.user?.role));
 
 async function signOut() {
   await logout();
@@ -88,7 +75,7 @@ async function signOut() {
   font: 700 19px var(--font-body);
   letter-spacing: -.07em;
   text-decoration: none;
-  text-transform: lowercase;
+  text-transform: uppercase;
 }
 
 .app-brand-mark {

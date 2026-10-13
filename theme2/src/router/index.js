@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from "vue-router";
+import { createRouter, createWebHistory, createWebHashHistory } from "vue-router";
 import ChartManager from "../components/ChartManager.vue";
 import WorkingTimes from "../components/WorkingTimes.vue";
 import WorkingTime from "../components/WorkingTime.vue";
@@ -8,13 +8,46 @@ import LoginView from "../views/LoginView.vue";
 import DashboardView from "../views/DashboardView.vue";
 import ForgotPasswordView from "../views/ForgotPasswordView.vue";
 import ResetPasswordView from "../views/ResetPasswordView.vue";
+import AdminView from "../views/AdminView.vue";
 import AdminTeamsView from "../views/AdminTeamsView.vue";
 import AcceptInviteView from "../views/AcceptInviteView.vue";
+import MyTimeView from "../views/MyTimeView.vue";
+import MyTeamView from "../views/MyTeamView.vue";
+import ProfileView from "../views/ProfileView.vue";
 import NotFoundView from "../views/NotFoundView.vue";
+import MyHoursView from "../views/MyHoursView.vue";
 import { authState, initializeAuth } from "../services/auth";
+import { isMobileApp } from "../utils/platform";
+
+// Mobile build: hash URLs, and no dashboards or charts.
+const isCordova = isMobileApp;
+
+// Home is the dashboard on the web; the mobile app opens on the user's own time instead.
+const homeRoute = isCordova
+  ? { path: "/", name: "Home", redirect: { name: "MyTime" } }
+  : { path: "/", name: "Home", component: DashboardView, meta: { requiresAuth: true } };
+
+// Dashboards (charts and averages) exist on the web only.
+const webOnlyRoutes = [
+  {
+    path: "/my-hours",
+    name: "MyHours",
+    component: MyHoursView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: "/chartManager/:userid",
+    name: "ChartManager",
+    component: ChartManager,
+    meta: { requiresAuth: true }
+  }
+];
+
+const SUPERVISOR_ROLES = ["administrator", "hr_payroll", "manager"];
 
 const router = createRouter({
-  history: createWebHistory(),
+  // No server inside the app to rewrite URLs: hash mode always reloads index.html.
+  history: isCordova ? createWebHashHistory() : createWebHistory(),
 
   scrollBehavior(to, from, savedPosition) {
     if (savedPosition) {
@@ -32,12 +65,7 @@ const router = createRouter({
   },
 
   routes: [
-    {
-      path: '/',
-      name: 'Home',
-      component: DashboardView,
-      meta: { requiresAuth: true }
-    },
+    homeRoute,
     {
       path: '/login',
       name: 'Login',
@@ -60,23 +88,48 @@ const router = createRouter({
       component: ResetPasswordView,
       meta: { guestOnly: true }
     },
-        {
+    {
       path: '/accept-invite',
       name: 'AcceptInvite',
       component: AcceptInviteView,
       meta: { guestOnly: true }
     },
     {
+      path: '/my-time',
+      name: 'MyTime',
+      component: MyTimeView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/my-team',
+      name: 'MyTeam',
+      component: MyTeamView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/profile',
+      name: 'Profile',
+      component: ProfileView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/admin',
+      name: 'Admin',
+      component: AdminView,
+      meta: { requiresAuth: true, requiresRole: ['administrator'] }
+    },
+    {
       path: '/admin/teams',
       name: 'AdminTeams',
       component: AdminTeamsView,
-      meta: { requiresAuth: true, requiresRole: ['administrator', 'hr_payroll', 'manager'] }
+      meta: { requiresAuth: true, requiresRole: SUPERVISOR_ROLES }
     },
     {
+      // Employees use My time, My team and Profile instead.
       path: '/directory',
       name: 'Directory',
       component: User,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, requiresRole: SUPERVISOR_ROLES }
     },
     {
       path: '/workingTimes/:userID',
@@ -108,12 +161,7 @@ const router = createRouter({
       props: true,
       meta: { requiresAuth: true }
     },
-    {
-      path: "/chartManager/:userid",
-      name: "ChartManager",
-      component: ChartManager,
-      meta: { requiresAuth: true }
-    },
+    ...(isCordova ? [] : webOnlyRoutes),
     {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',

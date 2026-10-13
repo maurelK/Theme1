@@ -2,37 +2,60 @@
   <AppLayout>
     <main class="page-shell">
 
-      <!-- ==================== EMPLOYEE: PROFILE ONLY ==================== -->
-      <template v-if="isEmployee">
-        <section class="hero">
-          <p class="eyebrow">My profile</p>
-          <h1>Your time,<br><em>clearly yours.</em></h1>
-          <p class="hero-copy">Manage your own details, working times, clock, and charts.</p>
-        </section>
+      <!-- Directory for managers, HR and the general manager (employees use My time / My team / Profile). -->
+      <div class="content-grid">
+        <!-- Search & Quick Selection Panel -->
+        <aside class="search-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">Directory</p><h2>Find a person</h2></div>
+          </div>
+          <form class="search-form" @submit.prevent="getUser">
+            <label for="search-email">Email address</label>
+            <div class="input-with-icon">
+              <input 
+                id="search-email" 
+                v-model="searchEmail" 
+                type="email" 
+                placeholder="name@company.com" 
+                required
+              >
+            </div>
+            <button class="button button-primary" type="submit">
+              Search directory
+            </button>
+          </form>
+          <p class="helper-text">Enter the user's email address (e.g. axel.ogouchi@epitech.eu).</p>
+
+          <div v-if="allUsers.length > 0" class="recent-accounts">
+            <p class="eyebrow">Recent accounts</p>
+            <div class="recent-accounts-list">
+              <button 
+                v-for="u in allUsers" 
+                :key="u.id" 
+                type="button" 
+                class="btn-link recent-account"
+                @click="selectUser(u)"
+              >
+                <strong>{{ u.username }}</strong> ({{ u.email }})
+              </button>
+            </div>
+          </div>
+        </aside>
 
         <section class="main-panel" aria-live="polite">
           <div v-if="user" class="profile-view">
-            <!-- Teams -->
-            <section class="team-card" v-if="myTeams.length > 0">
-              <p class="eyebrow">Your teams</p>
-              <div v-for="team in myTeams" :key="team.id" class="team-block">
-                <h3 class="team-name">{{ team.name }}</h3>
-                <p class="team-members-label">
-                  {{ otherMembers(team).length === 0 ? "No other members" : otherMembers(team).length + " other member" + (otherMembers(team).length === 1 ? "" : "s") }}
-                </p>
-                <ul class="team-members">
-                  <li v-for="member in otherMembers(team)" :key="member.id">
-                    <span class="team-member-name">{{ member.username }}</span>
-                    <span class="team-member-role">{{ member.role || "—" }}</span>
-                  </li>
-                </ul>
+            <div class="profile-header">
+              <div class="avatar">{{ userInitials }}</div>
+              <div>
+                <p class="eyebrow">Selected account</p>
+                <h2>{{ user.username }}</h2>
+                <p class="muted">{{ user.email }}</p>
               </div>
-            </section>
+              <span class="member-tag">Active</span>
+            </div>
 
-            <!-- Edit Account Form -->
             <form class="editor" @submit.prevent="updateUser">
               <div class="section-title">
-                <span class="step-number">01</span>
                 <div><p class="eyebrow">Profile details</p><h3>Edit account</h3></div>
               </div>
               <div class="form-grid">
@@ -46,206 +69,50 @@
               <div class="editor-actions">
                 <button class="button button-primary" type="submit" :disabled="editSaving">
                   {{ editSaving ? "Saving..." : "Save changes" }}
-                  <span class="button-arrow" aria-hidden="true">&#8599;</span>
                 </button>
+                <button v-if="isAdministrator" class="text-button" type="button" @click="deleteUser">Remove account</button>
               </div>
+              <p v-if="removeError" class="editor-alert editor-alert-error">{{ removeError }}</p>
             </form>
 
-            <!-- Danger zone (employee self-delete) -->
-            <section class="danger-zone">
-              <div>
-                <p class="eyebrow">Danger zone</p>
-                <h3>Delete my account</h3>
-                <p class="muted">
-                  Your account will no longer be able to sign in. Your working-time records
-                  will be preserved for reporting.
-                </p>
-              </div>
-              <button
-                class="danger-button"
-                type="button"
-                :disabled="deletingAccount"
-                @click="confirmSelfDelete"
-              >
-                {{ deletingAccount ? "Deleting..." : "Delete my account" }}
-              </button>
-              <p v-if="deleteError" class="editor-alert editor-alert-error">{{ deleteError }}</p>
-            </section>
-
-            <!-- Tabs for own data -->
-            <div class="user-dashboard-section" style="margin-top: 36px;">
-              <div class="section-title" style="margin-bottom: 20px;">
-                <span class="step-number">02</span>
-                <div>
-                  <p class="eyebrow">Time Management &amp; Insights</p>
-                  <h3>Your workspace</h3>
-                </div>
-              </div>
-
-              <div class="tab-nav">
-                <button type="button" class="btn-wt" :class="activeTab === 'workingTimes' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'workingTimes'">Working Times</button>
-                <button type="button" class="btn-wt" :class="activeTab === 'clock' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'clock'">Clock Manager</button>
-                <button type="button" class="btn-wt" :class="activeTab === 'charts' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'charts'">Dashboard</button>
-              </div>
-
-              <div class="tab-content-area">
-                <WorkingTimes v-if="activeTab === 'workingTimes'" :userId="user.id" @go-create-entry="activeTab = 'create'" />
-                <ClockManager v-else-if="activeTab === 'clock'" :userId="user.id" />
-                <ChartManager v-else-if="activeTab === 'charts'" :userId="user.id" />
-              </div>
-            </div>
           </div>
 
           <div v-else class="empty-state">
-            <div class="empty-orbit"><span></span></div>
-            <p class="eyebrow">Loading your profile…</p>
+            <p class="eyebrow">No account selected</p>
+            <h2>Search or select an account<br>to get started.</h2>
+            <p class="muted">The person's working times, clock status, and charts will appear here.</p>
           </div>
+
+          <p v-if="isAdministrator" class="helper-text">
+            To invite someone, go to <RouterLink to="/admin">Administration</RouterLink>.
+          </p>
         </section>
-      </template>
+      </div>
 
-      <!-- ==================== PRIVILEGED: DIRECTORY ==================== -->
-      <template v-else>
-        <section class="hero">
-          <p class="eyebrow">User Workspace</p>
-          <h1>Make time for<br><em>the right people.</em></h1>
-          <p class="hero-copy">Manage users, clocking, working times, and charts in one unified dashboard.</p>
-        </section>
-
-        <div class="content-grid">
-          <!-- Search & Quick Selection Panel -->
-          <aside class="search-panel">
-            <div class="panel-heading">
-              <span class="step-number">01</span>
-              <div><p class="eyebrow">Directory</p><h2>Find a person</h2></div>
-            </div>
-            <form class="search-form" @submit.prevent="getUser">
-              <label for="search-email">Email address</label>
-              <div class="input-with-icon">
-                <span aria-hidden="true">@</span>
-                <input 
-                  id="search-email" 
-                  v-model="searchEmail" 
-                  type="email" 
-                  placeholder="name@company.com" 
-                  required
-                >
-              </div>
-              <button class="button button-primary" type="submit">
-                <span>Search directory</span><span class="button-arrow" aria-hidden="true">&#8599;</span>
-              </button>
-            </form>
-            <p class="helper-text">Enter the user's email address (e.g. axel.ogouchi@epitech.eu).</p>
-
-            <div v-if="allUsers.length > 0" style="margin-top: 24px; border-top: 1px solid #bcc4b8; padding-top: 16px;">
-              <p class="eyebrow" style="font-size: 10px; margin-bottom: 8px;">Recent accounts:</p>
-              <div style="display: flex; flex-direction: column; gap: 6px;">
-                <button 
-                  v-for="u in allUsers" 
-                  :key="u.id" 
-                  type="button" 
-                  class="btn-link" 
-                  style="text-align: left; font-size: 12px; color: #263836; text-decoration: none;"
-                  @click="selectUser(u)"
-                >
-                  &bull; <strong>{{ u.username }}</strong> ({{ u.email }})
-                </button>
-              </div>
-            </div>
-          </aside>
-
-          <section class="main-panel" aria-live="polite">
-            <div v-if="user" class="profile-view">
-              <div class="profile-header">
-                <div class="avatar">{{ userInitials }}</div>
-                <div>
-                  <p class="eyebrow">Selected account</p>
-                  <h2>{{ user.username }}</h2>
-                  <p class="muted">{{ user.email }}</p>
-                </div>
-                <span class="member-tag">Active</span>
-              </div>
-
-              <form class="editor" @submit.prevent="updateUser">
-                <div class="section-title">
-                  <span class="step-number">02</span>
-                  <div><p class="eyebrow">Profile details</p><h3>Edit account</h3></div>
-                </div>
-                <div class="form-grid">
-                  <label>Full name<input v-model="editUsername" type="text" placeholder="Full name" required></label>
-                  <label>Email address<input v-model="editEmail" type="email" placeholder="name@company.com" required></label>
-                </div>
-
-                <p v-if="editError" class="editor-alert editor-alert-error">{{ editError }}</p>
-                <p v-else-if="editSuccess" class="editor-alert editor-alert-success">{{ editSuccess }}</p>
-
-                <div class="editor-actions">
-                  <button class="button button-primary" type="submit" :disabled="editSaving">
-                    {{ editSaving ? "Saving..." : "Save changes" }}
-                    <span class="button-arrow" aria-hidden="true">&#8599;</span>
-                  </button>
-                  <button class="text-button" type="button" @click="deleteUser">Remove account</button>
-                </div>
-              </form>
-
-              <div class="user-dashboard-section" style="margin-top: 36px;">
-                <div class="section-title" style="margin-bottom: 20px;">
-                  <span class="step-number">03</span>
-                  <div>
-                    <p class="eyebrow">Time Management &amp; Insights</p>
-                    <h3>{{ user.username }}'s Workspace</h3>
-                  </div>
-                </div>
-
-                <div class="tab-nav">
-                  <button type="button" class="btn-wt" :class="activeTab === 'workingTimes' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'workingTimes'">Working Times</button>
-                  <button type="button" class="btn-wt" :class="activeTab === 'clock' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'clock'">Clock Manager</button>
-                  <button type="button" class="btn-wt" :class="activeTab === 'charts' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'charts'">Dashboard</button>
-                  <button type="button" class="btn-wt" :class="activeTab === 'create' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'create'">Create Entry</button>
-                </div>
-
-                <div class="tab-content-area">
-                  <WorkingTimes v-if="activeTab === 'workingTimes'" :userId="user.id" @go-create-entry="activeTab = 'create'" />
-                  <ClockManager v-else-if="activeTab === 'clock'" :userId="user.id" />
-                  <ChartManager v-else-if="activeTab === 'charts'" :userId="user.id" />
-                  <WorkingTime v-else-if="activeTab === 'create'" :userId="user.id" />
-                </div>
-              </div>
-            </div>
-
-            <div v-else class="empty-state">
-              <div class="empty-orbit"><span></span></div>
-              <p class="eyebrow">Your directory awaits</p>
-              <h2>Search or select an account<br>to get started.</h2>
-              <p class="muted">The person's working times, clock status, and charts will appear here.</p>
-            </div>
-
-            <div v-if="isAdministrator" class="create-panel" style="margin-top: 40px;">
-              <div class="section-title">
-                <span class="step-number">04</span>
-                <div><p class="eyebrow">New entry</p><h3>Invite someone</h3></div>
-              </div>
-              <form class="create-form create-form-invite" @submit.prevent="createUser">
-                <input v-model="newUsername" type="text" placeholder="Full name" aria-label="New user name" required>
-                <input v-model="newEmail" type="email" placeholder="Email address" aria-label="New user email" required>
-                <select v-model="newRole" aria-label="Role" required>
-                  <option v-for="role in assignableRoles" :key="role" :value="role">{{ role }}</option>
-                </select>
-                <button class="button button-secondary" type="submit" :disabled="inviting">
-                  {{ inviting ? "Sending invite..." : "Send invite" }}
-                  <span aria-hidden="true">+</span>
-                </button>
-              </form>
-              <p v-if="inviteMessage" class="helper-text invite-feedback">{{ inviteMessage }}</p>
-              <p v-if="inviteError" class="helper-text invite-error">{{ inviteError }}</p>
-            </div>
-          </section>
+      <!-- Full width so tables and charts are not squeezed into the right column -->
+      <section v-if="user" class="user-dashboard-section workspace-full">
+        <div class="section-title section-title-spaced">
+          <div>
+            <p class="eyebrow">Time Management &amp; Insights</p>
+            <h3>{{ user.username }}'s Workspace</h3>
+          </div>
         </div>
-      </template>
 
-      <footer class="footer">
-        <span>Time Manager directory &amp; Working Time System</span>
-        <span>Made for focused teams &middot; 2026</span>
-      </footer>
+        <div class="tab-nav">
+          <button type="button" class="btn-wt" :class="activeTab === 'workingTimes' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'workingTimes'">Time entries</button>
+          <button type="button" class="btn-wt" :class="activeTab === 'clock' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'clock'">Clock in / out</button>
+          <button v-if="!isMobileApp" type="button" class="btn-wt" :class="activeTab === 'charts' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'charts'">Hours per day and week</button>
+          <button type="button" class="btn-wt" :class="activeTab === 'create' ? 'btn-primary' : 'btn-outline'" @click="activeTab = 'create'">New entry</button>
+        </div>
+
+        <div class="tab-content-area">
+          <WorkingTimes v-if="activeTab === 'workingTimes'" :userId="user.id" @go-create-entry="activeTab = 'create'" />
+          <ClockManager v-else-if="activeTab === 'clock'" :userId="user.id" />
+          <ChartManager v-else-if="activeTab === 'charts'" :userId="user.id" />
+          <WorkingTime v-else-if="activeTab === 'create'" :userId="user.id" />
+        </div>
+      </section>
+
     </main>
   </AppLayout>
 </template>
@@ -257,7 +124,8 @@ import ClockManager from "./ClockManager.vue";
 import ChartManager from "./ChartManager.vue";
 import AppLayout from "./AppLayout.vue";
 // Route profile requests through the shared authenticated API helper.
-import { apiFetch, authState, logout } from "../services/auth";
+import { apiFetch, authState } from "../services/auth";
+import { isMobileApp } from "../utils/platform";
 
 export default {
   name: "User",
@@ -274,22 +142,16 @@ export default {
     return {
       user: null,
       searchEmail: "",
-      newUsername: "",
-      newEmail: "",
-      newRole: "employee",
-      inviting: false,
-      inviteMessage: "",
-      inviteError: "",
       editUsername: "",
       editEmail: "",
       editSaving: false,
       editError: "",
       editSuccess: "",
-      deletingAccount: false,
-      deleteError: "",
+      removeError: "",
       activeTab: "workingTimes",
       allUsers: [],
-      myTeams: []
+      // Charts are a dashboard: web only.
+      isMobileApp
     };
   },
 
@@ -301,17 +163,6 @@ export default {
 
     isAdministrator() {
       return this.authUser?.role === "administrator";
-    },
-
-    isEmployee() {
-      return this.authUser?.role === "employee";
-    },
-
-    // Roles an administrator can assign directly at invite time. Administrator
-    // is intentionally excluded — promote to admin via the "Save role" control
-    // so privilege escalation is a separate, deliberate action.
-    assignableRoles() {
-      return ["employee", "manager", "hr_payroll"];
     },
 
     userInitials() {
@@ -332,7 +183,6 @@ export default {
         if (routeUserId) {
           this.fetchUserById(routeUserId);
           if (this.$route.name === 'ClockManager') this.activeTab = 'clock';
-          else if (this.$route.name === 'ChartManager') this.activeTab = 'charts';
           else if (this.$route.name === 'WorkingTimeCreate') this.activeTab = 'create';
           else this.activeTab = 'workingTimes';
         }
@@ -341,21 +191,11 @@ export default {
   },
 
   mounted() {
-    if (this.isEmployee && this.authUser) {
-      // Employees see only their own profile — no search, no directory.
-      this.user = this.authUser;
-      this.editUsername = this.authUser.username;
-      this.editEmail = this.authUser.email;
-      this.fetchMyTeams();
-    } else {
-      this.fetchAllUsers();
-    }
+    this.fetchAllUsers();
   },
 
   methods: {
     async fetchAllUsers() {
-      // Directory listing is for privileged roles only.
-      if (this.isEmployee) return;
       try {
         const response = await apiFetch("/api/users");
         if (response.ok) {
@@ -365,25 +205,6 @@ export default {
       } catch (err) {
         console.error(err);
       }
-    },
-
-    // Employees see only their own teams (backend enforces the scope).
-    async fetchMyTeams() {
-      try {
-        const response = await apiFetch("/api/teams");
-        if (response.ok) {
-          const data = await response.json();
-          this.myTeams = Array.isArray(data) ? data : (data.data || []);
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    },
-
-    // Other members of the team, excluding the current user.
-    otherMembers(team) {
-      const myId = this.authUser?.id;
-      return (team.users || []).filter(u => u.id !== myId);
     },
 
     async fetchUserById(id) {
@@ -411,52 +232,6 @@ export default {
       this.searchEmail = u.email;
     },
 
-    // Clear authentication state and return to the public login route.
-    async signOut() {
-      await logout();
-      this.user = null;
-      await this.$router.push({ name: "Login" });
-    },
-
-    // Send an invitation through the admin-only endpoint. Does not log the new
-    // user in or navigate anywhere — the invited user receives an email link.
-    async createUser() {
-      this.inviting = true;
-      this.inviteMessage = "";
-      this.inviteError = "";
-
-      try {
-        const response = await apiFetch("/api/users", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username: this.newUsername,
-            email: this.newEmail,
-            role: this.newRole
-          })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          const detail = data.errors
-            ? Object.values(data.errors).flat().join(", ")
-            : (data.error || "Unable to send invite");
-          throw new Error(detail);
-        }
-
-        const invited = data.data || data;
-        this.inviteMessage = `Invite sent to ${invited.email}. They will receive a link to set their password.`;
-        this.newUsername = "";
-        this.newEmail = "";
-        this.newRole = "employee";
-        this.fetchAllUsers();
-      } catch (reason) {
-        this.inviteError = reason.message;
-      } finally {
-        this.inviting = false;
-      }
-    },
 
     async updateUser() {
       // Client-side validation to avoid the round trip on obvious issues.
@@ -547,14 +322,19 @@ export default {
       this.selectUser(users[0]);
     },
 
+    // Only the general manager can remove other accounts; always ask first.
     async deleteUser() {
+      this.removeError = "";
+      if (!window.confirm(`Remove ${this.user.username}'s account? This cannot be undone.`)) return;
+
       const response = await apiFetch(`/api/users/${this.user.id}`, {
         method: "DELETE"
       });
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body.error || "Failed to delete user");
+        this.removeError = body.error || "Unable to remove this account.";
+        return;
       }
 
       this.user = null;
@@ -562,49 +342,6 @@ export default {
       this.editUsername = "";
       this.editEmail = "";
       this.fetchAllUsers();
-    },
-
-    // Two-step confirm for the destructive self-delete action.
-    async confirmSelfDelete() {
-      this.deleteError = "";
-
-      const first = window.confirm(
-        "Delete your account?\n\n" +
-        "You will not be able to sign in again. Your working-time records " +
-        "will be preserved for reporting."
-      );
-      if (!first) return;
-
-      const typed = window.prompt(
-        `Type your email to confirm (${this.authUser.email}):`,
-        ""
-      );
-      if (typed === null) return;
-      if (typed.trim().toLowerCase() !== (this.authUser.email || "").toLowerCase()) {
-        this.deleteError = "Email did not match. Account was not deleted.";
-        return;
-      }
-
-      this.deletingAccount = true;
-
-      try {
-        const response = await apiFetch(`/api/users/${this.authUser.id}`, {
-          method: "DELETE"
-        });
-
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(body.error || `Delete failed (${response.status})`);
-        }
-
-        // Sign out and bounce to login.
-        await logout();
-        this.$router.push({ name: "Login" });
-      } catch (err) {
-        this.deleteError = err.message || "Unable to delete account.";
-      } finally {
-        this.deletingAccount = false;
-      }
     }
   }
 };

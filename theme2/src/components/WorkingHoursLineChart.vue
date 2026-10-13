@@ -1,11 +1,12 @@
 <template>
   <div class="chart-content">
-    <h2>Working Hours Trend</h2>
+    <h2>Hours per week</h2>
 
     <Line
       v-if="chartData.labels.length > 0"
       :data="chartData"
       :options="chartOptions"
+      aria-label="Working hours per week. Detailed values are in the Hours per week table below."
     />
 
     <p v-else>No working time data available.</p>
@@ -25,7 +26,8 @@ import {
 } from "chart.js";
 
 import { Line } from "vue-chartjs";
-import { parseUtc, minutesBetween, browserTimezoneLabel } from "../utils/datetime";
+import { browserTimezoneLabel } from "../utils/datetime";
+import { hoursByWeek } from "../utils/workingHours";
 
 ChartJS.register(
   Title,
@@ -50,40 +52,18 @@ export default {
   },
 
   computed: {
-    // Same daily aggregation as the bar chart, sorted ascending. This ensures
-    // the trend line advances chronologically from left to right.
-    aggregatedByDay() {
-      const buckets = new Map();
-
-      for (const wt of this.workingTimes) {
-        const start = parseUtc(wt.start);
-        const end = parseUtc(wt.end);
-        if (!start || !end) continue;
-
-        const y = start.getFullYear();
-        const m = String(start.getMonth() + 1).padStart(2, "0");
-        const d = String(start.getDate()).padStart(2, "0");
-        const key = `${y}-${m}-${d}`;
-
-        const mins = minutesBetween(wt.start, wt.end);
-        buckets.set(key, (buckets.get(key) || 0) + mins);
-      }
-
-      return Array.from(buckets.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([date, minutes]) => ({
-          date,
-          hours: +(minutes / 60).toFixed(2)
-        }));
+    // Weekly totals (weeks start on Monday), complementing the daily bar chart.
+    weeks() {
+      return hoursByWeek(this.workingTimes);
     },
 
     chartData() {
       return {
-        labels: this.aggregatedByDay.map((d) => d.date),
+        labels: this.weeks.map((w) => `Week of ${w.key}`),
         datasets: [
           {
-            label: `Working Hours (${browserTimezoneLabel()})`,
-            data: this.aggregatedByDay.map((d) => d.hours),
+            label: `Hours per week (${browserTimezoneLabel()})`,
+            data: this.weeks.map((w) => w.hours),
             tension: 0.3,
             borderColor: "#287c78",
             backgroundColor: "rgba(40, 124, 120, .14)",
@@ -112,7 +92,7 @@ export default {
           },
           x: {
             grid: { color: "#f0e7dc" },
-            title: { display: true, text: "Date", color: "#71807a" }
+            title: { display: true, text: "Week", color: "#71807a" }
           }
         }
       };

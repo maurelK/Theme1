@@ -46,6 +46,7 @@ defmodule Theme1Web.Router do
 
     get "/roles", RoleController, :index
     get "/teams", TeamController, :index
+    get "/teams/:teamID/working-times", TeamController, :working_times
     # Team creation is allowed for managers and administrators.
     # The controller enforces the role check.
     post "/teams", TeamController, :create
@@ -76,6 +77,7 @@ defmodule Theme1Web.Router do
     # All existing business data now requires a verified JWT and CSRF header.
     pipe_through [:api, :authenticated_api]
     post "/workingtime/:id/correction-requests", CorrectionRequestController, :create
+    get "/correction-requests/mine", CorrectionRequestController, :mine
     # Clock (clock-in / clock-out / status). All roles can clock; admins and
     # managers can clock on behalf of users they cover.
     post "/clocks/:userID/in", ClockController, :clock_in

@@ -61,7 +61,7 @@
         </div>
 
         <!-- Action Buttons -->
-        <div class="wt-actions" style="margin-top: 24px; justify-content: flex-end;">
+        <div class="wt-actions wt-actions-end">
           <button
             v-if="!isEditMode"
             type="button"

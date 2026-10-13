@@ -5,15 +5,12 @@
 .page-shell > .main-panel {
   margin-top: 8px;
 }
-.footer { display: flex; justify-content: space-between; align-items: center; color: #71807a; font: 11px "DM Mono", monospace; text-transform: uppercase; letter-spacing: .12em; }
-.hero { padding: 104px 0 74px; max-width: 700px; }
 .eyebrow { margin: 0 0 13px; color: #a3614a; font: 500 10px "DM Mono", monospace; letter-spacing: .13em; text-transform: uppercase; }
 h1, h2, h3, p { margin-top: 0; }
 h1 { margin-bottom: 22px; color: #243332; font-size: clamp(46px, 7vw, 82px); font-weight: 500; line-height: .98; letter-spacing: -.07em; }
 h1 em { color: #b5684b; font-family: "Playfair Display", Georgia, serif; letter-spacing: -.04em; }
-.hero-copy { max-width: 330px; color: #71807a; font-size: 15px; line-height: 1.7; }
 .content-grid { display: grid; grid-template-columns: minmax(240px, .72fr) minmax(0, 1.7fr); gap: 7vw; align-items: start; }
-.search-panel { padding: 28px; background: #e4e7de; border-top: 2px solid #273a37; }
+.search-panel { padding: 28px; background: #e4e7de; border-top: 2px solid #263836; border-bottom: 2px solid #263836; border-left: 2px solid #263836; border-right: 2px solid #263836; }
 .panel-heading, .section-title { display: flex; gap: 17px; align-items: flex-start; }
 .step-number { color: #a3614a; font: 11px "DM Mono", monospace; }
 h2 { margin-bottom: 7px; color: #263836; font-size: 25px; font-weight: 600; letter-spacing: -.05em; }
@@ -29,6 +26,8 @@ input::placeholder { color: #9ca79c; }
 .button:hover:not(:disabled) { transform: translateY(-2px); }
 .button:disabled { cursor: wait; opacity: .6; }
 .button-primary { background: #263b38; color: #fffdf7; }
+.search-form .button-primary,
+.search-form .button-primary span { color: #fffdf7; }
 .button-primary:hover:not(:disabled) { background: #35504b; }
 .button-secondary { background: #d4ddd0; color: #263b38; }
 .button-arrow { font-size: 17px; line-height: 0; }
@@ -91,7 +90,6 @@ input::placeholder { color: #9ca79c; }
   background: #d4d6cc;
   border-radius: 2px;
 }
-.footer { margin-top: 95px; padding-top: 17px; border-top: 1px solid #d4d6cc; font-size: 9px; }
 @keyframes reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (max-width: 900px) {
@@ -104,7 +102,6 @@ input::placeholder { color: #9ca79c; }
 @media (max-width: 760px) {
   .page-shell { padding: 22px 22px 28px; }
   .workspace-label { display: none; }
-  .hero { padding: 78px 0 52px; }
   .content-grid { grid-template-columns: 1fr; gap: 34px; }
   .search-panel { padding: 24px; }
   .search-form { margin-top: 30px; }
@@ -112,7 +109,6 @@ input::placeholder { color: #9ca79c; }
   .create-form-invite { grid-template-columns: 1fr; }
   .editor-actions { flex-wrap: wrap; gap: 18px; }
   .create-form .button { justify-self: start; }
-  .footer { margin-top: 60px; }
 }
 
 /* Employee "Your teams" card */
@@ -238,3 +234,17 @@ input::placeholder { color: #9ca79c; }
   opacity: 0.6;
   cursor: wait;
 }
+.user-dashboard-section { margin-top: 36px; }
+.section-title-spaced { margin-bottom: 20px; }
+.recent-accounts { margin-top: 24px; padding-top: 16px; border-top: 1px solid #bcc4b8; }
+.recent-accounts .eyebrow { margin-bottom: 8px; }
+.recent-accounts-list { display: flex; flex-direction: column; gap: 6px; }
+.recent-account { color: #263836; font-size: 13px; text-align: left; text-decoration: none; }
+
+/* Directory: the selected user's workspace spans the full page width below the grid. */
+.workspace-full { margin-top: 48px; padding-top: 32px; border-top: 1px solid #d4d6cc; }
+.tab-content-area { min-width: 0; }
+
+/* Charts rendered inside a tab: drop the standalone page spacing and shrink the heading. */
+.tab-content-area .chart-page { padding: 24px 0 0; background: transparent; }
+.tab-content-area .chart-hero h1 { font-size: clamp(28px, 4vw, 40px); }

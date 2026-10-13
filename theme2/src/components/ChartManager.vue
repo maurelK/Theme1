@@ -3,10 +3,10 @@
     <main id="charts" class="chart-page">
       <header class="chart-hero">
         <div>
-          <p class="chart-kicker">Time Manager / Insights</p>
-          <h1>See how your<br><em>time moves.</em></h1>
+          <p class="chart-kicker">Working hours</p>
+          <h1>Hours per day<br><em>and per week.</em></h1>
         </div>
-        <p class="chart-subtitle">A clear view of your working rhythm, day by day and over time.</p>
+        <p class="chart-subtitle">Completed entries over the selected period. Leave the dates empty to see everything.</p>
       </header>
 
       <section class="date-toolbar" aria-label="Filter working times">
@@ -29,6 +29,28 @@
         <article class="chart-card"><WorkingHoursLineChart :workingTimes="filteredWorkingTimes" /></article>
         <article class="chart-card chart-card-pie"><WorkingHoursPieChart :workingTimes="filteredWorkingTimes" /></article>
       </section>
+
+      <!-- Text equivalent of the charts, for screen readers and low-vision users. -->
+      <section v-if="!loading && !error && dailyHours.length > 0" class="chart-tables" aria-label="Working hours as tables">
+        <p class="chart-averages">
+          Average: <strong>{{ averageDaily }} h</strong> per day worked,
+          <strong>{{ averageWeekly }} h</strong> per week.
+        </p>
+        <table class="chart-table">
+          <caption>Hours per week</caption>
+          <thead><tr><th scope="col">Week starting</th><th scope="col">Hours</th></tr></thead>
+          <tbody>
+            <tr v-for="week in weeklyHours" :key="week.key"><td>{{ week.key }}</td><td>{{ week.hours.toFixed(1) }}</td></tr>
+          </tbody>
+        </table>
+        <table class="chart-table">
+          <caption>Hours per day</caption>
+          <thead><tr><th scope="col">Date</th><th scope="col">Hours</th></tr></thead>
+          <tbody>
+            <tr v-for="day in dailyHours" :key="day.key"><td>{{ day.key }}</td><td>{{ day.hours.toFixed(1) }}</td></tr>
+          </tbody>
+        </table>
+      </section>
       </main>
   </component>
 </template>
@@ -40,6 +62,11 @@ import WorkingHoursPieChart from "./WorkingHoursPieChart.vue";
 import AppLayout from "./AppLayout.vue";
 // Route chart data requests through the shared authenticated API helper.
 import { apiFetch } from "../services/auth";
+import { parseUtc } from "../utils/datetime";
+import { hoursByDay, hoursByWeek, localDateKey } from "../utils/workingHours";
+
+const average = (buckets) =>
+  buckets.length ? (buckets.reduce((sum, b) => sum + b.hours, 0) / buckets.length).toFixed(1) : "0.0";
 
 export default {
   name: "ChartManager",
@@ -89,8 +116,10 @@ export default {
 
     filteredWorkingTimes() {
       return this.workingTimes.filter((workingTime) => {
-        if (!workingTime || !workingTime.start) return false;
-        const workingDate = workingTime.start.substring(0, 10);
+        const start = parseUtc(workingTime?.start);
+        if (!start) return false;
+        // Compare in the browser timezone, like the charts do.
+        const workingDate = localDateKey(start);
 
         if (this.startDate && workingDate < this.startDate) {
           return false;
@@ -102,6 +131,22 @@ export default {
 
         return true;
       });
+    },
+
+    dailyHours() {
+      return hoursByDay(this.filteredWorkingTimes);
+    },
+
+    weeklyHours() {
+      return hoursByWeek(this.filteredWorkingTimes);
+    },
+
+    averageDaily() {
+      return average(this.dailyHours);
+    },
+
+    averageWeekly() {
+      return average(this.weeklyHours);
     }
   },
 

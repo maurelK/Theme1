@@ -138,3 +138,14 @@ export function formatDurationBetween(utcStart, utcEnd) {
   const mins = minutesBetween(utcStart, utcEnd);
   return mins === 0 ? "—" : formatMinutes(mins);
 }
+// "12/10/2026 09:00 - 17:30" in the browser timezone, with both dates when the range spans midnight.
+export function formatRange(start, end) {
+  const startDate = parseUtc(start);
+  if (!startDate) return "Unknown";
+  const time = (date) => date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const endDate = parseUtc(end);
+  const startText = `${startDate.toLocaleDateString()} ${time(startDate)}`;
+  if (!endDate) return `${startText} - in progress`;
+  const sameDay = startDate.toDateString() === endDate.toDateString();
+  return `${startText} - ${sameDay ? "" : `${endDate.toLocaleDateString()} `}${time(endDate)}`;
+}

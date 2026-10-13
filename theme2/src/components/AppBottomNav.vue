@@ -22,45 +22,12 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { authState, logout } from "../services/auth";
+import { ICONS, navLinksFor } from "../utils/navigation";
 
 const router = useRouter();
 
-// Administrators see "Workspace"; everyone else sees "Overview".
-const dashboardLabel = computed(() =>
-  authState.user?.role === "administrator" ? "Workspace" : "Overview"
-);
-
-// Employees see "Profile"; other roles see "Directory".
-const directoryLabel = computed(() =>
-  authState.user?.role === "employee" ? "Profile" : "Directory"
-);
-
-const navLinks = computed(() => [
-  {
-    label: dashboardLabel.value,
-    to: "/",
-    icon: `
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M3 10.2 12 3l9 7.2V20a1.5 1.5 0 0 1-1.5 1.5h-4.75V14.5h-5.5v7H4.5A1.5 1.5 0 0 1 3 20V10.2Z"/>
-      </svg>
-    `
-  },
-  {
-    label: directoryLabel.value,
-    to: "/directory",
-    icon: `
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3h5A1.5 1.5 0 0 1 12 4.5v15A1.5 1.5 0 0 1 10.5 21h-5A1.5 1.5 0 0 1 4 19.5v-15Zm10 3A1.5 1.5 0 0 1 15.5 6h3A1.5 1.5 0 0 1 20 7.5v12a1.5 1.5 0 0 1-1.5 1.5h-3a1.5 1.5 0 0 1-1.5-1.5v-12Z"/>
-      </svg>
-    `
-  }
-]);
-
-const signOutIcon = `
-  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M10 3.5a1 1 0 0 1 1 1v9a1 1 0 1 1-2 0v-9a1 1 0 0 1 1-1Zm-4.6 2.3a1 1 0 0 1 .1 1.4A6 6 0 1 0 12 18a6 6 0 0 0 4.5-2.1 1 1 0 1 1 1.5 1.3A8 8 0 1 1 5.3 6.3a1 1 0 0 1 1.4-.1l.7.6Z"/>
-  </svg>
-`;
+const navLinks = computed(() => navLinksFor(authState.user?.role));
+const signOutIcon = ICONS.signOut;
 
 async function signOut() {
   await logout();
@@ -82,7 +49,8 @@ async function signOut() {
   border-top-right-radius: 18px;
   box-shadow: 0 -6px 24px rgba(36, 51, 50, .08);
   padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
-  grid-template-columns: repeat(3, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
 }
 
 .app-bottom-link {

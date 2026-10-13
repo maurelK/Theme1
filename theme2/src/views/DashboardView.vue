@@ -2,9 +2,9 @@
   <AppLayout>
     <main class="dashboard-shell">
       <section class="dashboard-hero">
-        <p class="dashboard-eyebrow">{{ roleIndex }} / {{ roleLabel }}</p>
-        <h1>{{ heroTitle }}<br><em>{{ heroAccent }}</em></h1>
-        <p>{{ heroDescription }}</p>
+        <p class="dashboard-eyebrow">{{ roleLabel }}</p>
+        <h1>Hello, <em>{{ firstName }}</em></h1>
+        <p class="hero-description">{{ heroDescription }}</p>
       </section>
 
       <section class="dashboard-note">
@@ -14,37 +14,41 @@
 
       <section v-if="role === 'employee'" class="dashboard-grid">
         <article class="dashboard-card dashboard-clock-card">
-          <p class="dashboard-eyebrow">Today's clock</p>
+          <p class="dashboard-eyebrow">Current time</p>
           <strong class="dashboard-time">{{ currentTime }}</strong>
-          <p>Recorded working time belongs to you.</p>
-          <RouterLink class="dashboard-button" to="/directory">View my records</RouterLink>
+          <p>Clock in and out from My time.</p>
+          <RouterLink class="dashboard-button" to="/my-time">Open my time</RouterLink>
         </article>
         <article class="dashboard-card dashboard-wide-card">
-          <p class="dashboard-eyebrow">This week (Mon–Sun)</p>
+          <p class="dashboard-eyebrow">This week, Monday to Sunday</p>
           <div class="dashboard-metric-row">
             <strong v-if="!recordsError">{{ employeeHours }} h</strong>
-            <strong v-else>—</strong>
-            <span>recorded hours</span>
+            <strong v-else>-</strong>
+            <span>of {{ WEEKLY_HOURS }} h</span>
           </div>
-          <div class="dashboard-progress"><span :style="{ width: `${employeeProgress}%` }"></span></div>
-          <p>Recorded time, not a performance score.</p>
+          <div
+            class="dashboard-progress"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-valuenow="employeeProgress"
+            :aria-label="`${employeeHours} of ${WEEKLY_HOURS} hours this week`"
+          ><span :style="{ width: `${employeeProgress}%` }"></span></div>
         </article>
         <article class="dashboard-card dashboard-records-card">
           <h2>Recent time entries</h2>
-          <p>Review your records and manage working-time entries.</p>
           <div v-if="recordsError" class="dashboard-error">{{ recordsError }}</div>
-          <div v-else-if="records.length === 0" class="dashboard-empty">No working-time entries yet.</div>
-          <div v-for="record in records.slice(0, 3)" :key="record.id" class="dashboard-row">
+          <div v-else-if="recentRecords.length === 0" class="dashboard-empty">No working-time entries yet.</div>
+          <div v-for="record in recentRecords" :key="record.id" class="dashboard-row">
             <span>{{ formatDate(record.start) }}</span>
             <strong>{{ duration(record.start, record.end) }}</strong>
           </div>
         </article>
         <article class="dashboard-card dashboard-rhythm-card">
-          <h2>Hours by day</h2>
-          <p>Recorded time, not a performance score.</p>
+          <h2>Hours by day this week</h2>
           <div v-for="day in weekDays" :key="day.label" class="dashboard-bar-row">
             <span>{{ day.label }}</span>
-            <div class="dashboard-bar-track"><span :style="{ width: `${day.percent}%` }"></span></div>
+            <div class="dashboard-bar-track" aria-hidden="true"><span :style="{ width: `${day.percent}%` }"></span></div>
             <strong>{{ day.hours.toFixed(1) }} h</strong>
           </div>
         </article>
@@ -52,13 +56,13 @@
 
       <section v-else-if="role === 'manager'" class="dashboard-grid">
         <article class="dashboard-card dashboard-metric-card">
-          <p class="dashboard-eyebrow">Assigned teams</p>
+          <p class="dashboard-eyebrow">Teams</p>
           <strong class="dashboard-stat">{{ teams.length }}</strong>
-          <span>Team groups in scope</span>
+          <span>{{ managerMemberCount }} members in total</span>
         </article>
         <article class="dashboard-card dashboard-wide-card">
-          <h2>Team snapshot</h2>
-          <p>Review assigned members and recorded hours with context.</p>
+          <h2>My teams</h2>
+          <p v-if="teams.length === 0" class="dashboard-empty">No team assigned yet.</p>
           <div v-for="team in teams.slice(0, 4)" :key="team.id" class="team-snapshot-block">
             <div class="dashboard-row team-snapshot-header">
               <span>{{ team.name }}</span>
@@ -67,7 +71,7 @@
             <ul v-if="team.users.length > 0" class="team-snapshot-members">
               <li v-for="member in team.users" :key="member.id">
                 <span class="team-snapshot-name">{{ member.username }}</span>
-                <span class="team-snapshot-role">{{ member.role || "—" }}</span>
+                <span class="team-snapshot-role">{{ formatRole(member.role) }}</span>
               </li>
             </ul>
             <p v-else class="team-snapshot-empty">No members yet.</p>
@@ -88,22 +92,20 @@
           <RouterLink class="dashboard-button" to="/admin/teams">Browse teams</RouterLink>
         </article>
         <article class="dashboard-card dashboard-records-card">
-          <h2>Review queue</h2>
-          <p>Open the directory to inspect team records and exceptions.</p>
+          <h2>Team members' hours</h2>
+          <p>Open the directory to see an employee's working times and clock status.</p>
           <RouterLink class="dashboard-button" to="/directory">Open directory</RouterLink>
         </article>
         <article class="dashboard-card dashboard-records-card">
-          <h2>Needs attention</h2>
-          <p>Prompts for review, not findings of misconduct.</p>
-          <div class="dashboard-row"><span>Assigned members</span><strong>{{ managerMemberCount }}</strong></div>
-          <div class="dashboard-row"><span>Review scope</span><strong>{{ teams.length }} teams</strong></div>
-        </article>
-        <article class="dashboard-card dashboard-records-card">
           <h2>Correction requests</h2>
-          <p>Review employee explanations and keep decisions traceable.</p>
           <div v-if="correctionRequests.length === 0" class="dashboard-empty">No pending requests.</div>
           <div v-for="request in correctionRequests" :key="request.id" class="dashboard-review-row">
-            <div><strong>{{ request.reason }}</strong><span>Entry #{{ request.working_time_id }}</span></div>
+            <div>
+              <strong>{{ request.requester_name || "Unknown employee" }}</strong>
+              <span>Recorded: {{ formatRange(request.current_start, request.current_end) }}</span>
+              <span v-if="request.proposed_start || request.proposed_end">Proposed: {{ formatRange(request.proposed_start || request.current_start, request.proposed_end || request.current_end) }}</span>
+              <span>Reason: {{ request.reason }}</span>
+            </div>
             <div class="dashboard-review-actions">
               <button class="dashboard-mini-button" type="button" @click="reviewCorrection(request.id, 'approved')">Approve</button>
               <button class="dashboard-mini-button dashboard-mini-button-danger" type="button" @click="reviewCorrection(request.id, 'rejected')">Reject</button>
@@ -114,33 +116,30 @@
 
       <section v-else-if="role === 'hr_payroll'" class="dashboard-grid">
         <article class="dashboard-card dashboard-metric-card">
-          <p class="dashboard-eyebrow">Approved reports</p>
+          <p class="dashboard-eyebrow">Teams</p>
           <strong class="dashboard-stat">{{ teams.length }}</strong>
-          <span>Team scopes available</span>
+          <span>{{ managerMemberCount }} members in total</span>
         </article>
         <article class="dashboard-card dashboard-wide-card">
-          <h2>Time &amp; payroll categories</h2>
-          <p>Keep recorded hours separate from pay calculations.</p>
-          <div v-for="category in payrollCategories" :key="category.name" class="dashboard-row">
-            <span>{{ category.name }}</span><strong>{{ category.status }}</strong>
-          </div>
-        </article>
-        <article class="dashboard-card dashboard-records-card">
-          <h2>Audit and oversight</h2>
-          <p>Reports remain access-scoped and traceable to approved records.</p>
-          <RouterLink class="dashboard-button" to="/directory">Review records</RouterLink>
+          <h2>Working-time records</h2>
+          <p>Open the directory to review an employee's entries and hours.</p>
+          <RouterLink class="dashboard-button" to="/directory">Open directory</RouterLink>
         </article>
         <article class="dashboard-card dashboard-records-card">
           <h2>Organization teams</h2>
-          <p>Browse all teams and members for reporting and auditing.</p>
+          <p>Browse all teams and their members.</p>
           <RouterLink class="dashboard-button" to="/admin/teams">Browse teams</RouterLink>
         </article>
         <article class="dashboard-card dashboard-records-card">
           <h2>Correction requests</h2>
-          <p>Review employee explanations and keep decisions traceable.</p>
           <div v-if="correctionRequests.length === 0" class="dashboard-empty">No pending requests.</div>
           <div v-for="request in correctionRequests" :key="request.id" class="dashboard-review-row">
-            <div><strong>{{ request.reason }}</strong><span>Entry #{{ request.working_time_id }}</span></div>
+            <div>
+              <strong>{{ request.requester_name || "Unknown employee" }}</strong>
+              <span>Recorded: {{ formatRange(request.current_start, request.current_end) }}</span>
+              <span v-if="request.proposed_start || request.proposed_end">Proposed: {{ formatRange(request.proposed_start || request.current_start, request.proposed_end || request.current_end) }}</span>
+              <span>Reason: {{ request.reason }}</span>
+            </div>
             <div class="dashboard-review-actions">
               <button class="dashboard-mini-button" type="button" @click="reviewCorrection(request.id, 'approved')">Approve</button>
               <button class="dashboard-mini-button dashboard-mini-button-danger" type="button" @click="reviewCorrection(request.id, 'rejected')">Reject</button>
@@ -152,192 +151,110 @@
       <section v-else class="dashboard-grid">
         <article class="dashboard-card dashboard-metric-card">
           <p class="dashboard-eyebrow">Employees</p>
-          <strong class="dashboard-stat">{{ userCount }}</strong>
-          <span>Accounts in the system</span>
+          <strong class="dashboard-stat">{{ employeeCount }}</strong>
+          <span>{{ users.length }} accounts in total</span>
         </article>
         <article class="dashboard-card dashboard-wide-card">
-          <h2>Roles &amp; permissions</h2>
-          <p>Predefined access is enforced by the API and visible here for governance.</p>
-          <div v-for="availableRole in roles" :key="availableRole.id" class="dashboard-row">
-            <span>{{ availableRole.name }}</span>
-            <strong>Defined</strong>
+          <h2>Accounts by role</h2>
+          <div v-for="entry in accountsByRole" :key="entry.role" class="dashboard-row">
+            <span>{{ formatRole(entry.role) }}</span>
+            <strong>{{ entry.count }}</strong>
           </div>
         </article>
         <article class="dashboard-card dashboard-records-card">
-          <h2>Teams and oversight</h2>
-          <p>{{ teams.length }} teams currently exist. Membership changes are administrator-only.</p>
+          <h2>Teams</h2>
+          <p>{{ teams.length }} team{{ teams.length === 1 ? "" : "s" }}, {{ managerMemberCount }} members in total.</p>
           <RouterLink class="dashboard-button" to="/admin/teams">Browse teams</RouterLink>
         </article>
-        <article class="dashboard-card dashboard-admin-card">
-          <h2>Administrator controls</h2>
-          <p>Manage predefined roles and create team groups from this protected workspace.</p>
-          <p v-if="adminMessage" class="dashboard-feedback">{{ adminMessage }}</p>
-          <form class="dashboard-admin-form" @submit.prevent="createTeam">
-            <label>New team name<input v-model="newTeamName" type="text" required placeholder="Team name"></label>
-            <button class="dashboard-button" type="submit">Create team</button>
-          </form>
-          <form class="dashboard-admin-form" @submit.prevent="changeRole">
-            <label>User<select v-model="selectedUserId" required>
-              <option disabled value="">Select user</option>
-              <option v-for="user in users" :key="user.id" :value="user.id">{{ user.username }} ({{ user.email }})</option>
-            </select></label>
-            <label>Role<select v-model="selectedRole" required>
-              <option v-for="availableRole in roles" :key="availableRole.id" :value="availableRole.name">{{ availableRole.name }}</option>
-            </select></label>
-            <button class="dashboard-button" type="submit">Save role</button>
-          </form>
-        </article>
         <article class="dashboard-card dashboard-records-card">
-          <h2>Reports and audit</h2>
-          <p>System governance should explain who acted and when.</p>
-          <div class="dashboard-row"><span>Role catalog</span><strong>{{ roles.length }} roles</strong></div>
-          <div class="dashboard-row"><span>Team groups</span><strong>{{ teams.length }} teams</strong></div>
-          <div class="dashboard-row"><span>Account changes</span><strong>Traceable</strong></div>
-        </article>
-
-        <!-- Shift configuration -->
-        <article class="dashboard-card dashboard-records-card">
-          <h2>Shift configuration</h2>
-          <p>Set the shift for a user or a team. Users inherit from their team, or fall back to the default.</p>
-
-          <div class="shift-config-targets">
-            <button class="dashboard-button" type="button" @click="openUserShiftPicker">
-              Configure a user's shift
-            </button>
-            <button class="dashboard-button" type="button" @click="openTeamShiftPicker">
-              Configure a team's shift
-            </button>
-          </div>
-
-          <p v-if="shiftFeedback" class="dashboard-feedback">{{ shiftFeedback }}</p>
+          <h2>Administration</h2>
+          <p>Invite users, change roles, create teams and set shifts.</p>
+          <RouterLink class="dashboard-button" to="/admin">Open administration</RouterLink>
         </article>
       </section>
 
-      <section class="dashboard-password-card">
-        <div>
-          <p class="dashboard-eyebrow">Account security</p>
-          <h2>Change password</h2>
-          <p>Update your password without exposing it to the application.</p>
-        </div>
-        <form class="dashboard-password-form" @submit.prevent="changePassword">
-          <input v-model="currentPassword" type="password" placeholder="Current password" autocomplete="current-password" required>
-          <PasswordField
-            v-model="newPassword"
-            label="New password"
-            input-id="dashboard-new-password"
-            autocomplete="new-password"
-          />
-          <button class="dashboard-button" type="submit">Update password</button>
-        </form>
-        <p v-if="passwordMessage" class="dashboard-feedback">{{ passwordMessage }}</p>
-      </section>
-
-      <footer class="dashboard-footer">
-        <span>Time Manager · access and responsibilities</span>
-        <RouterLink to="/directory">Open directory</RouterLink>
-      </footer>
     </main>
-
-    <!-- Target picker -->
-    <ShiftTargetPicker
-      v-if="pickerMode"
-      :mode="pickerMode"
-      :users="users"
-      :teams="teams"
-      @close="onPickerCancelled"
-      @selected="onPickerSelected"
-    />
-
-    <!-- Shift editor -->
-    <ShiftEditorModal
-      v-if="shiftTarget"
-      :target="shiftTarget"
-      @close="shiftTarget = null"
-      @saved="onShiftSaved"
-    />
   </AppLayout>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-import { apiFetch, authState, logout } from "../services/auth";
-import { parseUtc } from "../utils/datetime";
+import { apiFetch, authState } from "../services/auth";
+import { formatRange, parseUtc } from "../utils/datetime";
 import AppLayout from "../components/AppLayout.vue";
-import PasswordField from "../components/PasswordField.vue";
-import ShiftEditorModal from "../components/ShiftEditorModal.vue";
-import ShiftTargetPicker from "../components/ShiftTargetPicker.vue";
+import { formatRole } from "../utils/roles";
 import "./Dashboard.css";
 
 // The dashboard reads the server-authorized role and never trusts a client-selected role.
-const router = useRouter();
+const WEEKLY_HOURS = 40;
+const DAILY_HOURS = 8;
+const HERO_DESCRIPTIONS = {
+  employee: "Your working hours this week and your latest entries.",
+  manager: "Your teams, their members and pending correction requests.",
+  hr_payroll: "Teams, working-time records and pending correction requests.",
+  administrator: "Accounts, roles, teams and shifts across the organisation."
+};
+
 const role = computed(() => authState.user?.role || "employee");
-const roleLabel = computed(() => role.value.replace("_", " "));
-const roleIndex = computed(() => ({ employee: "01", manager: "02", hr_payroll: "03", administrator: "04" }[role.value] || "01"));
-const heroTitle = computed(() => ({ employee: "Your time,", manager: "A clearer view of", hr_payroll: "Approved records,", administrator: "Clear rules for" }[role.value] || "Your workspace,"));
-const heroAccent = computed(() => ({ employee: "clearly yours.", manager: "team time.", hr_payroll: "with context.", administrator: "time records." }[role.value] || "clearly yours."));
-const heroDescription = computed(() => ({ employee: "A simple place to record your hours, review your records, and flag anything that needs a second look.", manager: "Plan coverage, review exceptions, and understand team records without checking every profile manually.", hr_payroll: "Review approved reports and time categories with a clear audit trail.", administrator: "Set fair access, approved categories, and accountable reporting across the system." }[role.value] || "A clear place to manage time."));
-const noteTitle = computed(() => role.value === "employee" ? "A clear promise" : "Access and responsibility");
-const noteText = computed(() => role.value === "employee" ? "Time Manager records working time, not every action on your computer." : "Access is scoped by role, ownership, and team membership.");
+const roleLabel = computed(() => formatRole(role.value));
+const firstName = computed(() => (authState.user?.username || "").split(" ")[0]);
+const heroDescription = computed(() => HERO_DESCRIPTIONS[role.value] || HERO_DESCRIPTIONS.employee);
+// Tells employees exactly what is collected about them, as a guard against misuse.
+const noteTitle = computed(() => role.value === "employee" ? "What is recorded" : "Your access");
+const noteText = computed(() => role.value === "employee"
+  ? "Only your clock-in and clock-out times. No other activity is tracked."
+  : "You only see the people your role and teams give you access to.");
 const currentTime = ref("--:--");
 const records = ref([]);
 const recordsError = ref("");
 const teams = ref([]);
-const roles = ref([]);
 const users = ref([]);
-const userCount = ref(0);
 const newTeamName = ref("");
-const selectedUserId = ref("");
-const selectedRole = ref("");
 const adminMessage = ref("");
-const currentPassword = ref("");
-const newPassword = ref("");
-const passwordMessage = ref("");
 const correctionRequests = ref([]);
-const shiftTarget = ref(null);
-const shiftFeedback = ref("");
-const pickerMode = ref(null); // null | "user" | "team"
 
-// Total hours worked in the current week (Monday 00:00 → Sunday 23:59:59
-// in browser-local time). Uses the same UTC parsing as the rest of the app.
-const employeeHours = computed(() => {
+// Entries started in the current week (Monday 00:00 to next Monday 00:00, browser-local time).
+const thisWeekRecords = computed(() => {
   const now = new Date();
-  const day = now.getDay(); // 0 = Sunday, 1 = Monday, ...
-  const daysFromMonday = day === 0 ? 6 : day - 1;
+  const daysFromMonday = (now.getDay() + 6) % 7;
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysFromMonday);
-  monday.setHours(0, 0, 0, 0);
+  const nextMonday = new Date(monday);
+  nextMonday.setDate(monday.getDate() + 7);
 
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 7);
-
-  const totalMinutes = records.value.reduce((sum, record) => {
+  return records.value.filter((record) => {
     const start = parseUtc(record.start);
-    const end = parseUtc(record.end);
-    if (!start || !end) return sum;
-    if (start < monday || start >= sunday) return sum;
-    return sum + Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60000));
-  }, 0);
-
-  return (totalMinutes / 60).toFixed(1);
-});
-const employeeProgress = computed(() => Math.min(100, Math.round((Number(employeeHours.value) / 40) * 100)));
-const weekDays = computed(() => {
-  const labels = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-  return labels.map((label, index) => {
-    const hours = records.value.reduce((total, record) => {
-      const date = record.start ? new Date(record.start.replace(" ", "T")) : null;
-      return date && date.getDay() === index + 1 ? total + durationHours(record.start, record.end) : total;
-    }, 0);
-    return { label, hours, percent: Math.min(100, Math.round((hours / 8) * 100)) };
+    return start && start >= monday && start < nextMonday;
   });
 });
+const employeeHours = computed(() =>
+  thisWeekRecords.value.reduce((total, record) => total + durationHours(record.start, record.end), 0).toFixed(1)
+);
+const employeeProgress = computed(() => Math.min(100, Math.round((Number(employeeHours.value) / WEEKLY_HOURS) * 100)));
+const weekDays = computed(() => {
+  const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  return labels.map((label, index) => {
+    const hours = thisWeekRecords.value.reduce((total, record) => {
+      const day = (parseUtc(record.start).getDay() + 6) % 7;
+      return day === index ? total + durationHours(record.start, record.end) : total;
+    }, 0);
+    return { label, hours, percent: Math.min(100, Math.round((hours / DAILY_HOURS) * 100)) };
+  });
+});
+const recentRecords = computed(() =>
+  [...records.value]
+    .sort((a, b) => (parseUtc(b.start)?.getTime() || 0) - (parseUtc(a.start)?.getTime() || 0))
+    .slice(0, 3)
+);
 const managerMemberCount = computed(() => teams.value.reduce((total, team) => total + team.users.length, 0));
-const payrollCategories = [
-  { name: "Ordinary hours", status: "Standard category" },
-  { name: "Night-shift hours", status: "Review policy" },
-  { name: "Overtime", status: "Approval required" },
-  { name: "Compensation time", status: "Approval required" }
-];
+const employeeCount = computed(() => users.value.filter((user) => user.role === "employee").length);
+const accountsByRole = computed(() => {
+  const counts = {};
+  for (const user of users.value) {
+    const key = user.role || "none";
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return Object.entries(counts).map(([role, count]) => ({ role, count }));
+});
 
 onMounted(async () => {
   currentTime.value = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -366,18 +283,8 @@ onMounted(async () => {
   }
 
   if (role.value === "administrator") {
-    const [usersResponse, rolesResponse] = await Promise.all([
-      apiFetch("/api/users"),
-      apiFetch("/api/roles")
-    ]);
-    if (usersResponse.ok) {
-      users.value = await usersResponse.json();
-      userCount.value = users.value.length;
-    }
-    if (rolesResponse.ok) {
-      roles.value = await rolesResponse.json();
-      selectedRole.value = roles.value[0]?.name || "";
-    }
+    const usersResponse = await apiFetch("/api/users");
+    if (usersResponse.ok) users.value = await usersResponse.json();
   }
 });
 
@@ -407,36 +314,6 @@ async function createTeam() {
   setTimeout(() => (adminMessage.value = ""), 3000);
 }
 
-// Promote or demote a user through the administrator-only role endpoint.
-async function changeRole() {
-  const response = await apiFetch(`/api/admin/users/${selectedUserId.value}/role`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ role: selectedRole.value })
-  });
-
-  adminMessage.value = response.ok ? "Role updated." : "Unable to update role.";
-  if (response.ok) {
-    const usersResponse = await apiFetch("/api/users");
-    if (usersResponse.ok) users.value = await usersResponse.json();
-  }
-}
-
-// Submit password changes through the CSRF-protected authentication endpoint.
-async function changePassword() {
-  const response = await apiFetch("/api/auth/password", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ current_password: currentPassword.value, new_password: newPassword.value })
-  });
-
-  passwordMessage.value = response.ok ? "Password updated." : "Unable to update password.";
-  if (response.ok) {
-    currentPassword.value = "";
-    newPassword.value = "";
-  }
-}
-
 // Reviewers approve or reject requests without exposing the JWT to the browser.
 async function reviewCorrection(id, status) {
   const response = await apiFetch(`/api/reviews/correction-requests/${id}`, {
@@ -448,64 +325,21 @@ async function reviewCorrection(id, status) {
   if (response.ok) correctionRequests.value = correctionRequests.value.filter((request) => request.id !== id);
 }
 
-async function signOut() {
-  await logout();
-  await router.push({ name: "Login" });
-}
-
-// --- Shift configuration ---------------------------------------------------
-
-function openUserShiftPicker() {
-  pickerMode.value = "user";
-  shiftFeedback.value = "";
-}
-
-function openTeamShiftPicker() {
-  pickerMode.value = "team";
-  shiftFeedback.value = "";
-}
-
-function onPickerSelected(item) {
-  if (pickerMode.value === "user") {
-    shiftTarget.value = {
-      type: "user",
-      id: item.id,
-      label: `${item.label} (${item.sub})`
-    };
-  } else {
-    shiftTarget.value = {
-      type: "team",
-      id: item.id,
-      label: item.label
-    };
-  }
-  pickerMode.value = null;
-}
-
-function onPickerCancelled() {
-  pickerMode.value = null;
-}
-
-function onShiftSaved() {
-  shiftTarget.value = null;
-  shiftFeedback.value = "Shift saved.";
-  setTimeout(() => {
-    shiftFeedback.value = "";
-  }, 2500);
-}
-
+// Open entries (no end yet) count as zero until they are closed.
 function durationHours(start, end) {
-  if (!start || !end) return 0;
-  const milliseconds = new Date(end.replace(" ", "T")) - new Date(start.replace(" ", "T"));
+  const startDate = parseUtc(start);
+  const endDate = parseUtc(end);
+  if (!startDate || !endDate) return 0;
+  const milliseconds = endDate - startDate;
   return milliseconds > 0 ? milliseconds / 3_600_000 : 0;
 }
 
 function duration(start, end) {
-  const hours = durationHours(start, end);
-  return `${hours.toFixed(1)} h`;
+  return parseUtc(end) ? `${durationHours(start, end).toFixed(1)} h` : "In progress";
 }
 
 function formatDate(value) {
-  return value ? new Date(value.replace(" ", "T")).toLocaleDateString() : "Unknown date";
+  const date = parseUtc(value);
+  return date ? date.toLocaleDateString() : "Unknown date";
 }
 </script>
