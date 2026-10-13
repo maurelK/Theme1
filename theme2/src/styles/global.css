@@ -26,6 +26,7 @@
   --font-mono: "DM Mono", monospace;
 
   /* Letter spacing */
+  --tracking-body: 0.02em;
   --tracking-heading: 0.04em;
   --tracking-label: 0.06em;
 
@@ -62,9 +63,29 @@ body {
   color: var(--color-ink);
   font-family: var(--font-body);
   font-size: 16px;
+  letter-spacing: var(--tracking-body);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Keep shared heading spacing even where older component styles tighten letters. */
+#app :is(h1, h2, h3, h4, h5, h6, h1 em, h2 em, h3 em, .app-brand,
+  .dashboard-time, .dashboard-stat, .dashboard-metric-row strong,
+  .clock-time, .wt-stat-value) {
+  letter-spacing: var(--tracking-heading);
+}
+
+/* Accent text uses the same upright typeface as the surrounding text. */
+#app em {
+  font-family: inherit;
+  font-style: normal;
+  font-weight: inherit;
+}
+
+#app :is(.clock-time, .avatar, .input-with-icon, .app-brand-mark) {
+  font-family: var(--font-body);
+  font-style: normal;
 }
 
 #app {
@@ -202,5 +223,84 @@ img {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Shared accessible foregrounds, including components with legacy local colors. */
+:root :is(.eyebrow, .wt-eyebrow, .chart-kicker, .text-button, .clear-dates),
+:root .danger-zone :is(.eyebrow, h3) {
+  color: var(--color-accent-soft);
+}
+
+:root :is(label, .wt-field, .helper-text, .muted, .lede, .nf-copy,
+  .hero-description, .dashboard-eyebrow, .chart-subtitle, .clock-shift-line,
+  .wt-stat-label, .wt-empty-state) {
+  color: var(--color-ink-soft);
+}
+
+:root .dashboard-note > span,
+:root .dashboard-card > :is(p, span),
+:root .dashboard-metric-row > span,
+:root .dashboard-card li {
+  color: var(--color-ink-soft);
+}
+
+:root .admin-teams-shell .admin-teams-header .lede,
+:root .admin-teams-shell :is(.team-list-empty, .team-detail-empty) {
+  color: var(--color-ink-soft);
+}
+
+:root .member-tag {
+  color: var(--color-positive);
+}
+
+:root .password-field .password-rules li {
+  color: var(--color-ink-soft);
+}
+
+:root .password-field .password-rules li.met {
+  color: var(--color-positive);
+}
+
+:root .password-field .password-meter[data-strength] .password-meter-label {
+  color: var(--color-ink-soft);
+}
+
+/* Global heading styles also apply to spans; button text must inherit its foreground. */
+.btn-wt.btn-primary span {
+  color: inherit;
+}
+
+/* Standalone recovery links need their own touch target and spacing. */
+.auth-shell .muted > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  padding: 4px 0;
+}
+
+/* Keep long profile identities and their role badge inside narrow viewports. */
+.profile-page .profile-header > div:not(.avatar) {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.profile-page .profile-header .member-tag {
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .profile-page .profile-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .profile-page .profile-header > div:not(.avatar) {
+    flex-basis: calc(100% - 80px);
+  }
+
+  .profile-page .profile-header .member-tag {
+    margin-left: 0;
   }
 }
