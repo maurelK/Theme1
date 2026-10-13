@@ -5,10 +5,10 @@
       <h1>Sign in to your workspace.</h1>
       <form class="search-form" @submit.prevent="submit">
         <label for="login-email">Email address</label>
-        <input id="login-email" v-model="email" type="email" required autocomplete="email">
+        <input id="login-email" v-model="email" type="email" required autocomplete="email" :aria-describedby="error ? 'login-error' : undefined">
         <label for="login-password">Password</label>
-        <input id="login-password" v-model="password" type="password" required autocomplete="current-password">
-        <p v-if="error" class="wt-alert wt-alert-error">{{ error }}</p>
+        <input id="login-password" v-model="password" type="password" required autocomplete="current-password" :aria-describedby="error ? 'login-error' : undefined">
+        <p v-if="error" id="login-error" class="wt-alert wt-alert-error" role="alert" aria-atomic="true">{{ error }}</p>
         <button class="button button-primary" type="submit" :disabled="loading">
           {{ loading ? "Signing in..." : "Sign in" }}
         </button>
