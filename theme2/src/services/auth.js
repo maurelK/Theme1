@@ -131,7 +131,14 @@ async function saveProfile(user) {
   await localDb.set(PROFILE_KEY, { user, lastOnlineCheck: Date.now() });
 }
 
-async function storeMobileSession({ user, token, refresh_token: refreshToken }) {
+async function storeMobileSession({ user, token, refresh_token: refreshToken, ...rest }) {
+  // The Keystore only stores strings: a missing token means the server did not
+  // answer as a mobile session (outdated backend, "client" not received...).
+  if (typeof token !== "string" || typeof refreshToken !== "string" || !user) {
+    const body = { user, token, refresh_token: refreshToken, ...rest };
+    const received = Object.keys(body).filter((key) => body[key] !== undefined);
+    throw new Error(`The server did not return a mobile session (received: ${received.join(", ") || "nothing"}).`);
+  }
   tokens.access = token;
   tokens.refresh = refreshToken;
   await Promise.all([secureStore.set(ACCESS_TOKEN_KEY, token), secureStore.set(REFRESH_TOKEN_KEY, refreshToken)]);
