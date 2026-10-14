@@ -63,7 +63,7 @@
 
 <script setup>
 import { ref } from "vue";
-import { apiFetch } from "../services/auth";
+import { sendOrQueue } from "../data/mutations";
 
 const props = defineProps({
   workingTime: { type: Object, required: true }
@@ -100,27 +100,23 @@ async function submit() {
   error.value = "";
 
   try {
-    const res = await apiFetch(
-      `/api/workingtime/${props.workingTime.id}/correction-requests`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reason: reason.value.trim(),
-          proposed_start: inputToApi(proposedStart.value),
-          proposed_end: inputToApi(proposedEnd.value)
-        })
-      }
-    );
+    const body = {
+      reason: reason.value.trim(),
+      proposed_start: inputToApi(proposedStart.value),
+      proposed_end: inputToApi(proposedEnd.value)
+    };
+    // Works offline: queued and sent when the connection returns.
+    const { queued } = await sendOrQueue({
+      type: "correction",
+      label: "Correction request",
+      method: "POST",
+      path: `/api/workingtime/${props.workingTime.id}/correction-requests`,
+      body,
+      // Lets "My correction requests" show it before it reaches the server.
+      meta: { ...body, current_start: props.workingTime.start, current_end: props.workingTime.end }
+    });
 
-    const body = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      error.value = body.error || `Unable to submit request (${res.status})`;
-      return;
-    }
-
-    emit("submitted");
+    emit("submitted", { queued });
   } catch (err) {
     error.value = err.message || "Unable to submit request.";
   } finally {

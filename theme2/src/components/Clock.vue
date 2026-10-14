@@ -26,10 +26,6 @@ const {
   error,
   fromCache,
   online,
-  pendingCount,
-  syncing,
-  rejected,
-  dismissRejected,
   toggle: toggleClock
 } = useClock(userId);
 
@@ -85,13 +81,6 @@ const shiftLabel = computed(() => {
   return `${fmt(s.start_minutes)}-${fmt(s.end_minutes)} (${shiftTzLabel(s.tz_offset_minutes ?? 0)}) - ${s.source}`;
 });
 
-const pendingLabel = computed(() => {
-  const count = pendingCount.value;
-  if (!count) return "";
-  const what = `${count} action${count === 1 ? "" : "s"}`;
-  return syncing.value ? `Sending ${what}...` : `${what} saved on this device, sent when the connection returns.`;
-});
-
 async function toggle() {
   // Must run before the first await so the confirmation sound is allowed to play.
   unlockAudio();
@@ -123,10 +112,6 @@ onBeforeUnmount(() => {
   <main class="clock-shell">
     <div class="clock-time">{{ formattedTime }}</div>
 
-    <p v-if="!online" class="clock-banner clock-banner-offline" role="status">
-      Offline. You can still clock in and out; it will be sent when the connection returns.
-    </p>
-
     <div v-if="!userId" class="clock-empty">Select a user to manage their clock.</div>
 
     <div v-else class="clock-panel">
@@ -155,14 +140,8 @@ onBeforeUnmount(() => {
       <p v-if="error" class="clock-alert clock-alert-error" role="alert">{{ error }}</p>
       <p v-else-if="lastAction" class="clock-alert clock-alert-success" role="status">{{ lastAction }}</p>
 
-      <p v-if="pendingLabel" class="clock-pending" role="status">{{ pendingLabel }}</p>
-
-      <ul v-if="rejected.length" class="clock-rejected" role="alert">
-        <li v-for="item in rejected" :key="item.id">
-          <span>{{ item.label }} made offline was refused: {{ item.message }}. Ask your manager to correct it.</span>
-          <button type="button" class="clock-dismiss" @click="dismissRejected(item.id)">Dismiss</button>
-        </li>
-      </ul>
+      <!-- The offline banner (AppLayout) shows pending and refused actions. -->
+      <p v-if="!online" class="clock-pending">Clocking works offline.</p>
     </div>
   </main>
 </template>
@@ -256,12 +235,6 @@ onBeforeUnmount(() => {
 }
 
 /* Offline mode */
-.clock-banner {
-  margin: 0 0 16px;
-  padding: 10px 14px;
-  font-size: 14px;
-}
-.clock-banner-offline { border: 1px solid #8a5a00; background: #fff4dc; color: #5c3d00; }
 .clock-tag {
   display: inline-block;
   margin-left: 8px;
@@ -271,16 +244,4 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 .clock-pending { margin: 12px 0 0; color: #4f5d58; font-size: 14px; }
-.clock-rejected { margin: 12px 0 0; padding: 0; list-style: none; text-align: left; }
-.clock-rejected li {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border: 1px solid #a33b2b;
-  color: #7a2a1e;
-  font-size: 14px;
-}
-.clock-dismiss { border: 0; background: none; color: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 </style>

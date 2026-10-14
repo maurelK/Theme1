@@ -12,12 +12,24 @@
       <div class="admin-teams-layout">
         <!-- Team list -->
         <aside class="team-list-panel">
-          <p class="eyebrow">All teams ({{ teams.length }})</p>
+          <!-- Works offline: queued and created when the connection returns. -->
+          <form v-if="canManageMembers" class="create-team-form" @submit.prevent="createTeam">
+            <label for="new-team-name" class="eyebrow">New team (works offline)</label>
+            <div class="add-member-row">
+              <input id="new-team-name" v-model="newTeamName" type="text" class="add-member-input" placeholder="Team name" required>
+              <button class="btn-wt btn-primary" type="submit" :disabled="creatingTeam">
+                {{ creatingTeam ? "Creating..." : "Create" }}
+              </button>
+            </div>
+          </form>
+
+          <p class="eyebrow">All teams ({{ displayTeams.length }})</p>
           <input
             v-model="filter"
             type="text"
             class="team-filter"
             placeholder="Filter by team name"
+            aria-label="Filter by team name"
           />
           <ul class="team-list">
             <li v-if="filteredTeams.length === 0" class="team-list-empty">
@@ -30,7 +42,10 @@
                 type="button"
                 @click="selectTeam(team)"
               >
-                <span class="team-list-item-name">{{ team.name }}</span>
+                <span class="team-list-item-name">
+                  {{ team.name }}
+                  <span v-if="team.pending" class="pending-tag">Not sent yet</span>
+                </span>
                 <span class="team-list-item-count">{{ team.users.length }}</span>
               </button>
             </li>
@@ -50,17 +65,23 @@
               <span class="team-detail-count">{{ selectedTeam.users.length }} members</span>
             </header>
 
-            <p v-if="actionError" class="alert alert-error">{{ actionError }}</p>
-            <p v-if="actionMessage" class="alert alert-success">{{ actionMessage }}</p>
+            <p v-if="actionError" class="alert alert-error" role="alert">{{ actionError }}</p>
+            <p v-if="actionMessage" class="alert alert-success" role="status">{{ actionMessage }}</p>
 
-            <!-- Add member -->
-            <div v-if="canManageMembers" ref="candidatesRef" class="candidates-wrap">
+            <!-- A team created offline has no server id yet: members come after the sync. -->
+            <p v-if="selectedTeam.pending" class="alert">
+              This team will be created when the connection returns. You can add members once it exists.
+            </p>
+
+            <!-- Add member (works offline) -->
+            <div v-else-if="canManageMembers" ref="candidatesRef" class="candidates-wrap">
               <div class="add-member-row">
                 <input
                   v-model="addMemberQuery"
                   type="text"
                   class="add-member-input"
                   placeholder="Search a user by name or email"
+                  aria-label="Search a user to add"
                   @focus="addMemberFocused = true"
                 />
                 <button
@@ -111,12 +132,15 @@
             <ul class="member-list">
               <li v-for="member in selectedTeam.users" :key="member.id">
                 <div>
-                  <p class="member-name">{{ member.username }}</p>
+                  <p class="member-name">
+                    {{ member.username }}
+                    <span v-if="member.pending" class="pending-tag">Not sent yet</span>
+                  </p>
                   <p class="member-email">{{ member.email }}</p>
                 </div>
                 <span class="member-role">{{ formatRole(member.role) }}</span>
                 <button
-                  v-if="canManageMembers"
+                  v-if="canManageMembers && !member.pending"
                   class="btn-wt btn-danger small"
                   type="button"
                   :disabled="removingMemberId === member.id"
@@ -130,7 +154,7 @@
               </li>
             </ul>
 
-            <TeamHours :teamId="selectedTeam.id" />
+            <TeamHours v-if="!selectedTeam.pending" :teamId="selectedTeam.id" />
           </div>
         </section>
       </div>
@@ -143,6 +167,12 @@ import AppLayout from "../components/AppLayout.vue";
 import TeamHours from "../components/TeamHours.vue";
 import { apiFetch, authState } from "../services/auth";
 import { formatRole } from "../utils/roles";
+import { outboxChanges, pendingItems, sendOrQueue } from "../data/mutations";
+import { sync } from "../data/sync";
+import { confirmDialog } from "../platform/native";
+
+const TYPE = "team";
+const QUEUED_MESSAGE = "Saved on this device. It will be applied when the connection returns.";
 
 export default {
   name: "AdminTeamsView",
@@ -153,8 +183,12 @@ export default {
     return {
       teams: [],
       users: [],
+      // Team actions queued offline, shown on top of the server data.
+      pending: [],
       filter: "",
       selectedTeamId: null,
+      newTeamName: "",
+      creatingTeam: false,
       addMemberQuery: "",
       addMemberFocused: false,
       selectedUserId: null,
@@ -171,14 +205,37 @@ export default {
       return ["administrator", "manager"].includes(authState.user?.role);
     },
 
+    // Bumped when the outbox changes (action queued or synced).
+    outboxVersion() {
+      return outboxChanges.value;
+    },
+
+    // Server teams with queued changes applied: new teams, added and removed members.
+    displayTeams() {
+      const created = this.pending
+        .filter((item) => item.meta.kind === "create")
+        .map((item) => ({ id: `pending-${item.id}`, name: item.meta.name, users: [], pending: true }));
+
+      const withChanges = this.teams.map((team) => {
+        const changes = this.pending.filter((item) => String(item.meta.teamId) === String(team.id));
+        const removed = new Set(changes.filter((c) => c.meta.kind === "remove").map((c) => c.meta.userId));
+        const added = changes
+          .filter((c) => c.meta.kind === "add" && !team.users.some((u) => u.id === c.meta.user.id))
+          .map((c) => ({ ...c.meta.user, pending: true }));
+        return { ...team, users: [...team.users.filter((u) => !removed.has(u.id)), ...added] };
+      });
+
+      return [...withChanges, ...created];
+    },
+
     filteredTeams() {
       const q = this.filter.trim().toLowerCase();
-      if (!q) return this.teams;
-      return this.teams.filter((t) => t.name.toLowerCase().includes(q));
+      if (!q) return this.displayTeams;
+      return this.displayTeams.filter((t) => t.name.toLowerCase().includes(q));
     },
 
     selectedTeam() {
-      return this.teams.find((t) => t.id === this.selectedTeamId) || null;
+      return this.displayTeams.find((t) => t.id === this.selectedTeamId) || null;
     },
 
     // Total candidates available (users not already in the selected team).
@@ -212,33 +269,56 @@ export default {
     }
   },
 
+  watch: {
+    outboxVersion() {
+      this.loadPending();
+    }
+  },
+
   mounted() {
     this.loadTeams();
     this.loadUsers();
+    this.loadPending();
+    // Once queued actions reach the server, show the real teams.
+    this.stopSyncListener = sync.onSynced(() => this.loadTeams());
     document.addEventListener("click", this.onDocumentClick);
   },
 
   beforeUnmount() {
+    this.stopSyncListener?.();
     document.removeEventListener("click", this.onDocumentClick);
   },
 
   methods: {
     formatRole,
 
+    // Offline, apiFetch answers with the copy saved on the phone.
     async loadTeams() {
-      const res = await apiFetch("/api/teams");
-      if (res.ok) {
-        const data = await res.json();
-        this.teams = Array.isArray(data) ? data : (data.data || []);
+      try {
+        const res = await apiFetch("/api/teams", { silent: true });
+        if (res.ok) {
+          const data = await res.json();
+          this.teams = Array.isArray(data) ? data : (data.data || []);
+        }
+      } catch {
+        this.actionError = "Teams are not saved on this device yet. Open this page once with a connection.";
       }
     },
 
     async loadUsers() {
-      const res = await apiFetch("/api/users");
-      if (res.ok) {
-        const data = await res.json();
-        this.users = Array.isArray(data) ? data : (data.data || []);
+      try {
+        const res = await apiFetch("/api/users", { silent: true });
+        if (res.ok) {
+          const data = await res.json();
+          this.users = Array.isArray(data) ? data : (data.data || []);
+        }
+      } catch {
+        // No saved copy offline: there are simply no candidates to add.
       }
+    },
+
+    async loadPending() {
+      this.pending = await pendingItems(TYPE);
     },
 
     selectTeam(team) {
@@ -269,24 +349,65 @@ export default {
       this.addMemberFocused = true;
     },
 
+    flash(message) {
+      this.actionMessage = message;
+      setTimeout(() => (this.actionMessage = ""), 3000);
+    },
+
+    async createTeam() {
+      const name = this.newTeamName.trim();
+      if (!name) return;
+      this.creatingTeam = true;
+      this.actionError = "";
+
+      try {
+        const { queued, data } = await sendOrQueue({
+          type: TYPE,
+          label: `Create team "${name}"`,
+          method: "POST",
+          path: "/api/teams",
+          body: { name },
+          meta: { kind: "create", name }
+        });
+        this.newTeamName = "";
+        await this.loadPending();
+        if (queued) {
+          this.flash(QUEUED_MESSAGE);
+        } else {
+          await this.loadTeams();
+          if (data?.id) this.selectedTeamId = data.id;
+          this.flash(`Team "${name}" created.`);
+        }
+      } catch (err) {
+        this.actionError = err.message;
+      } finally {
+        this.creatingTeam = false;
+      }
+    },
+
     async addMember() {
       if (!this.selectedUserId) return;
+      const user = this.users.find((u) => u.id === this.selectedUserId);
+      const team = this.selectedTeam;
       this.addingMember = true;
       this.actionError = "";
 
       try {
-        const res = await apiFetch(
-          `/api/teams/${this.selectedTeamId}/members/${this.selectedUserId}`,
-          { method: "POST" }
-        );
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || `Add failed (${res.status})`);
-        }
-        this.actionMessage = "Member added.";
+        const { queued } = await sendOrQueue({
+          type: TYPE,
+          label: `Add ${user.username} to ${team.name}`,
+          method: "POST",
+          path: `/api/teams/${team.id}/members/${user.id}`,
+          meta: {
+            kind: "add",
+            teamId: team.id,
+            user: { id: user.id, username: user.username, email: user.email, role: user.role }
+          }
+        });
         this.selectedUserId = null;
-        await this.loadTeams();
-        setTimeout(() => (this.actionMessage = ""), 2500);
+        await this.loadPending();
+        if (!queued) await this.loadTeams();
+        this.flash(queued ? QUEUED_MESSAGE : "Member added.");
       } catch (err) {
         this.actionError = err.message;
       } finally {
@@ -295,22 +416,29 @@ export default {
     },
 
     async removeMember(member) {
-      if (!confirm(`Remove ${member.username} from ${this.selectedTeam.name}?`)) return;
+      const team = this.selectedTeam;
+      const confirmed = await confirmDialog(`Remove ${member.username} from ${team.name}?`, {
+        title: "Remove member",
+        confirmLabel: "Remove"
+      });
+      if (!confirmed) return;
+
       this.removingMemberId = member.id;
       this.actionError = "";
 
       try {
-        const res = await apiFetch(
-          `/api/teams/${this.selectedTeamId}/members/${member.id}`,
-          { method: "DELETE" }
-        );
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || `Remove failed (${res.status})`);
-        }
-        this.actionMessage = "Member removed.";
-        await this.loadTeams();
-        setTimeout(() => (this.actionMessage = ""), 2500);
+        const { queued } = await sendOrQueue({
+          type: TYPE,
+          label: `Remove ${member.username} from ${team.name}`,
+          method: "DELETE",
+          path: `/api/teams/${team.id}/members/${member.id}`,
+          // Already removed by someone else: the goal is reached.
+          okStatuses: [404],
+          meta: { kind: "remove", teamId: team.id, userId: member.id }
+        });
+        await this.loadPending();
+        if (!queued) await this.loadTeams();
+        this.flash(queued ? QUEUED_MESSAGE : "Member removed.");
       } catch (err) {
         this.actionError = err.message;
       } finally {
@@ -622,5 +750,23 @@ export default {
   .member-role {
     grid-column: 1 / -1;
   }
+}
+
+/* Offline: team creation form and actions not sent yet. */
+.create-team-form {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.pending-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid #8a5a00;
+  color: #5c3d00;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
 }
 </style>

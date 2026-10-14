@@ -62,21 +62,26 @@ defmodule Theme1Web.TeamController do
   end
 
   defp create_team(conn, name, role, current_user) do
-    changeset = Ecto.Changeset.cast(%Team{}, %{name: name}, [:name])
-
-    case Repo.insert(changeset) do
-      {:ok, team} ->
-        # Auto-join manager creators; admins are not auto-added.
-        team =
+    # Team.changeset validates the name and turns a duplicate name into a 422
+    # (it used to crash with a 500, which an offline replay would retry forever).
+    result =
+      Repo.transaction(fn ->
+        with {:ok, team} <- Repo.insert(Team.changeset(%Team{}, %{name: name})) do
+          # Auto-join manager creators; admins are not auto-added.
           if role == "manager" do
             %TeamMembership{}
             |> Ecto.Changeset.change(%{team_id: team.id, user_id: current_user.id})
             |> Repo.insert!()
-            team
-          else
-            team
           end
 
+          team
+        else
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+
+    case result do
+      {:ok, team} ->
         # Reload with users so the response shape matches index/2.
         team = Repo.preload(team, users: :role)
         conn |> put_status(:created) |> json(team_json(team))
@@ -95,7 +100,13 @@ defmodule Theme1Web.TeamController do
          %Team{} = team <- Repo.get(Team, team_id),
          %User{} = _user <- Repo.get(User, user_id),
          :ok <- authorize_team_manage(conn, team),
-         {:ok, _membership} <- Repo.insert(%TeamMembership{team_id: team_id, user_id: user_id}) do
+         # Adding someone already in the team is a success (it used to crash on
+         # the unique index); an offline replay must reach the same end state.
+         {:ok, _membership} <-
+           Repo.insert(%TeamMembership{team_id: team_id, user_id: user_id},
+             on_conflict: :nothing,
+             conflict_target: [:team_id, :user_id]
+           ) do
       json(conn, %{ok: true})
     else
       nil ->

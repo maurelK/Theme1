@@ -23,7 +23,7 @@ const PROFILE_KEY = "profile";
 // Kept after sign-out, to detect that a different person signs in on this phone.
 const LAST_USER_KEY = "lastUserId";
 // Per-user caches cleared when another person signs in (outbox items stay, tagged by user).
-const USER_CACHE_PREFIXES = ["clock:"];
+const USER_CACHE_PREFIXES = ["clock:", "cache:"];
 // Same lifetime as the refresh token on the server (Theme1.RefreshTokens).
 export const MAX_OFFLINE_MS = 7 * 24 * 3600 * 1000;
 
@@ -58,6 +58,8 @@ export async function apiFetch(path, { silent = false, retried = false, ...optio
     headers.set("X-CSRF-Token", authState.csrfToken);
   }
 
+  const cacheable = isCachedRead(path, options);
+
   let response;
   try {
     response = await fetch(API_BASE + path, {
@@ -66,6 +68,9 @@ export async function apiFetch(path, { silent = false, retried = false, ...optio
       headers
     });
   } catch (error) {
+    // Offline: answer reads with the last response saved on the phone.
+    const cached = cacheable && (await readCachedResponse(path));
+    if (cached) return cached;
     if (!silent) notifyError();
     throw error;
   }
@@ -74,7 +79,48 @@ export async function apiFetch(path, { silent = false, retried = false, ...optio
   if (isMobile && response.status === 401 && !retried && !AUTH_PATHS.has(path) && tokens.refresh) {
     if (await refreshTokens()) return apiFetch(path, { silent, retried: true, ...options });
   }
+
+  if (cacheable && response.ok) await saveCachedResponse(path, response.clone());
   return response;
+}
+
+// ---------------------------------------------------------------------------
+// Offline reads (mobile): every successful GET is kept per user, so pages show
+// the last known data without network. Only what the user's role could fetch
+// is stored, and another user's sign-in clears it.
+// ---------------------------------------------------------------------------
+
+const READ_CACHE_PREFIX = "cache:";
+const CACHED_AT_HEADER = "X-Cached-At";
+
+function isCachedRead(path, options) {
+  const method = (options.method || "GET").toUpperCase();
+  return isMobile && method === "GET" && !AUTH_PATHS.has(path) && Boolean(authState.user);
+}
+
+const readCacheKey = (path) => `${READ_CACHE_PREFIX}${authState.user.id}:${path}`;
+
+async function saveCachedResponse(path, response) {
+  try {
+    await localDb.set(readCacheKey(path), { status: response.status, body: await response.text(), at: Date.now() });
+  } catch {
+    // Caching is best effort.
+  }
+}
+
+async function readCachedResponse(path) {
+  const entry = await localDb.get(readCacheKey(path));
+  if (!entry) return null;
+  return new Response(entry.body, {
+    status: entry.status,
+    headers: { "Content-Type": "application/json", [CACHED_AT_HEADER]: String(entry.at) }
+  });
+}
+
+// When a response came from the phone's cache, the time it was saved (ms), else null.
+export function cachedAt(response) {
+  const value = response?.headers?.get(CACHED_AT_HEADER);
+  return value ? Number(value) : null;
 }
 
 // ---------------------------------------------------------------------------

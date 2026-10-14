@@ -8,8 +8,8 @@
         Apache Cordova Team
     </author>
     <content src="index.html" />
-    <access origin="http://10.0.2.2:4000" />
-    <allow-navigation href="http://10.0.2.2:4000/*" />
+    <access origin="http://145.241.169.233:4000/" />
+    <allow-navigation href="http://145.241.169.233:4000/*" />
     <allow-intent href="http://*/*" />
     <allow-intent href="https://*/*" />
 

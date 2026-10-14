@@ -21,15 +21,19 @@ const rejected = ref([]);
 const afterSyncListeners = new Set();
 let started = false;
 
-async function sendItem(item) {
+// The item id doubles as Idempotency-Key: the server applies a replay once.
+export async function sendItem(item) {
   const response = await apiFetch(item.path, {
     method: item.method,
     silent: true,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Idempotency-Key": item.id },
     body: item.body ? JSON.stringify(item.body) : undefined
   });
   const body = await response.json().catch(() => ({}));
-  return { status: response.status, body };
+  // Some refusals mean the goal is already reached (e.g. 404 when removing a
+  // member someone else already removed): count them as applied.
+  const applied = response.ok || (item.okStatuses || []).includes(response.status);
+  return { status: applied && !response.ok ? 200 : response.status, body };
 }
 
 async function flush() {

@@ -26,3 +26,75 @@ Si le backend tourne sur une VM distante
 Si tu parles de ta VM (par exemple le déploiement Oracle mentionné dans auth_controller.ex), mets son IP publique à la place. Ça marche alors depuis n'importe quel réseau, sans contrainte de Wi-Fi ni de pare-feu local. Il faut quand même que le port 4000, ou le port exposé, soit ouvert dans les règles réseau de la VM.
 
 Dis-moi laquelle des deux tu vises et j'applique les modifs.
+
+
+
+
+
+MOBILE AUTH 
+Le plan est implémenté, et j'ai vu que tu as installé cordova-plugin-fingerprint-aio (v6.0.1, présent dans mobile/plugins). Où en sont les tests :
+
+Backend : il compile sans avertissement et il est testé sur la base de dev. Les tokens créés par le test ont été supprimés.
+Front : il compile, web et mobile, mais n'a pas encore été testé sur un téléphone. L'empreinte, le Keystore et le mode avion ne se testent que sur l'émulateur ou un appareil réel.
+Rien n'est commité. Le travail du pointage hors ligne est aussi encore en attente.
+
+Backend
+Fichier	Rôle
+Migration create_refresh_tokens (appliquée)	Table des refresh tokens. Seule l'empreinte SHA-256 est stockée.
+refresh_tokens.ex (nouveau)	Émission, rotation, révocation unitaire et globale
+auth.ex	JWT de 1 h pour le mobile, 24 h inchangées pour le web. Tous les tokens sont révoqués au changement ou à la réinitialisation du mot de passe.
+auth_controller.ex + routeur	Login mobile → token + refresh_token. Nouvelles routes publiques POST /api/auth/refresh et POST /api/auth/revoke.
+user_controller.ex	Supprimer un compte révoque tous ses tokens
+auth_plug.ex	Le CSRF n'est vérifié que pour le cookie. Le Bearer n'en a plus besoin.
+Le refresh token :
+
+Rotation : chaque utilisation le remplace par un nouveau.
+Détection de vol : si un ancien token est réutilisé, c'est qu'il a été copié. Tous les tokens de l'utilisateur sont alors révoqués, sur tous ses appareils.
+Testé :
+
+rotation qui fonctionne ;
+rejeu d'un ancien token détecté (et la session légitime est coupée aussi) ;
+token révoqué, révocation globale et token inventé refusés ;
+Bearer sans CSRF accepté (HTTP 200) ;
+Bearer invalide refusé.
+Front mobile
+Fichier	Rôle
+platform/secureStore.js	JWT et refresh token dans le Keystore
+platform/biometric.js	Empreinte, avec repli sur le code ou le schéma du téléphone
+platform/native.js	Dialogue de confirmation natif
+services/auth.js	Réécrit : session web (cookie) et session mobile (Keystore) bien séparées
+services/signOut.js	« 2 actions are not synchronised yet… Sign out anyway? »
+Au démarrage de l'app :
+
+Session sur le téléphone ?
+Si non, écran de connexion (réseau obligatoire).
+Si oui, déverrouillage par empreinte ou code. En cas d'annulation, l'écran de connexion propose « Unlock with fingerprint or PIN ».
+En ligne :
+la session est vérifiée auprès du serveur, et le JWT est renouvelé automatiquement s'il a expiré ;
+un 401 ramène à l'écran de connexion, avec la raison affichée.
+Hors ligne : l'app s'ouvre avec le profil enregistré, si la dernière vérification date de moins de 7 jours. Sinon, un message demande de se reconnecter.
+Pendant l'utilisation :
+
+JWT expiré (401) : l'app fait un refresh, puis rejoue la requête une fois, sans que l'utilisateur le voie.
+Retour à la connexion : si la session expire en arrière-plan (par exemple pendant la synchro), l'app ramène à l'écran de connexion. L'outbox est conservée pour ce même utilisateur.
+Autre utilisateur sur le téléphone : le cache du précédent est effacé. Ses actions en attente restent séparées.
+Choix et limites à connaître
+Téléphone sans verrouillage d'écran : le Keystore refuse de fonctionner. Les tokens restent alors en mémoire seulement, et il faut se reconnecter à chaque lancement. Je n'utilise jamais de stockage non chiffré en repli.
+Empreinte non configurée : le Keystore exige déjà un téléphone verrouillé, donc la session s'ouvre sans demande.
+Déconnexion hors ligne : le token est supprimé du téléphone, mais il ne peut pas être révoqué côté serveur. Il expire seul au bout de 7 jours au maximum.
+Après la mise à jour : les anciens tokens mobiles, valables 24 h et non chiffrés, sont effacés. Il faudra se reconnecter une fois.
+À tester sur l'émulateur
+npm run android, puis se connecter.
+Fermer et rouvrir l'app : l'empreinte doit être demandée. Sur l'émulateur, on la simule avec Extended controls → Fingerprint.
+Passer en mode avion, rouvrir l'app, puis pointer.
+Remettre le réseau : le pointage part. Le JWT a pu expirer entre-temps : c'est le refresh qui doit prendre le relais.
+Changer le mot de passe depuis le web : au prochain appel, le téléphone doit revenir à l'écran de connexion.
+Tes coéquipiers devront lancer mix ecto.migrate. Il y a deux nouvelles migrations : clocks et refresh_tokens.
+
+Après tes tests, je prépare les commits sans mention de Claude, par exemple :
+
+pointage hors ligne côté backend ;
+refresh tokens ;
+infrastructure hors ligne front ;
+session mobile ;
+build mobile.

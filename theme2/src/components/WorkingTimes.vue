@@ -7,6 +7,7 @@
         <p class="wt-eyebrow">Times shown in {{ tzLabel }}</p>
         <h1>Working Times <em>History</em></h1>
       </div>
+      <p v-if="entriesLockedOffline" class="wt-muted" role="note">Creating, editing and deleting entries requires a connection.</p>
       <div class="wt-actions">
         <button class="btn-wt btn-outline" @click="getWorkingTimes" :disabled="loading">
           <span>Refresh</span>
@@ -168,6 +169,7 @@
 <script>
 import "./WorkingTime.css";
 import { apiFetch, authState } from "../services/auth";
+import { network } from "../platform/network";
 import CorrectionRequestModal from "./CorrectionRequestModal.vue";
 import AppLayout from "./AppLayout.vue";
 import {
@@ -226,7 +228,16 @@ export default {
     // Manual creation and direct edit/delete are for reviewers only.
     // Employees get their records from clocking in/out.
     canManageEntries() {
-      return authState.user?.role !== "employee";
+      return authState.user?.role !== "employee" && this.online;
+    },
+
+    // Reviewers editing entries offline: explain why the buttons are gone.
+    entriesLockedOffline() {
+      return authState.user?.role !== "employee" && !this.online;
+    },
+
+    online() {
+      return network.online.value;
     },
 
     totalOvertimeFormatted() {
@@ -387,9 +398,11 @@ export default {
       this.correctionTarget = wt;
     },
 
-    onCorrectionSubmitted() {
+    onCorrectionSubmitted({ queued } = {}) {
       this.correctionTarget = null;
-      this.successMessage = "Correction request submitted.";
+      this.successMessage = queued
+        ? "Correction request saved on this device. It will be sent when the connection returns."
+        : "Correction request submitted.";
     },
 
     clearFilters() {
