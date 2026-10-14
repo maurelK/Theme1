@@ -2,10 +2,18 @@ defmodule Theme1.Auth do
   import Ecto.Query
 
   alias Theme1.{Repo, Role, User}
-  alias Theme1.{InvitationToken, PasswordResetToken}
+  alias Theme1.{InvitationToken, PasswordResetToken, RefreshTokens}
+
+  # Web sessions have no refresh token: the cookie JWT lasts a working day.
+  @web_jwt_ttl_seconds 86_400
+  # Mobile JWTs are short-lived; the app renews them with a revocable refresh token.
+  @mobile_jwt_ttl_seconds 3_600
 
   # Authenticate credentials and return only a safe user projection plus JWT data.
-  def authenticate(email, password) when is_binary(email) and is_binary(password) do
+  # `client: :mobile` also returns a refresh token and a short-lived JWT.
+  def authenticate(email, password, client \\ :web)
+
+  def authenticate(email, password, client) when is_binary(email) and is_binary(password) do
     case Repo.get_by(User, email: email) |> Repo.preload(:role) do
       %User{} = user ->
         cond do
@@ -14,11 +22,7 @@ defmodule Theme1.Auth do
             {:error, :invalid_credentials}
 
           User.valid_password?(user, password) ->
-            csrf_token = random_token()
-
-            with {:ok, jwt, _claims} <- sign_token(user, csrf_token) do
-              {:ok, %{user: public_user(user), jwt: jwt, csrf_token: csrf_token}}
-            end
+            issue_session(user, client)
 
           true ->
             {:error, :invalid_credentials}
@@ -29,7 +33,34 @@ defmodule Theme1.Auth do
     end
   end
 
-  def authenticate(_email, _password), do: {:error, :invalid_credentials}
+  def authenticate(_email, _password, _client), do: {:error, :invalid_credentials}
+
+  @doc """
+  Exchange a mobile refresh token for a new JWT and a new refresh token.
+  """
+  def refresh_session(refresh_token) do
+    with {:ok, user, new_refresh_token} <- RefreshTokens.rotate(refresh_token),
+         {:ok, session} <- sign_session(user, @mobile_jwt_ttl_seconds) do
+      {:ok, Map.put(session, :refresh_token, new_refresh_token)}
+    end
+  end
+
+  defp issue_session(user, :mobile) do
+    with {:ok, session} <- sign_session(user, @mobile_jwt_ttl_seconds) do
+      {:ok, Map.put(session, :refresh_token, RefreshTokens.issue(user))}
+    end
+  end
+
+  defp issue_session(user, _client), do: sign_session(user, @web_jwt_ttl_seconds)
+
+  # A fresh JWT (with its CSRF claim) and the safe user projection.
+  defp sign_session(user, ttl_seconds) do
+    csrf_token = random_token()
+
+    with {:ok, jwt, _claims} <- sign_token(user, csrf_token, ttl_seconds) do
+      {:ok, %{user: public_user(user), jwt: jwt, csrf_token: csrf_token}}
+    end
+  end
 
   # Roles that may be assigned at invite time. Administrator is excluded so
   # privilege escalation is a separate, auditable action (the "Save role"
@@ -119,6 +150,7 @@ defmodule Theme1.Auth do
       user
       |> User.password_changeset(%{password: new_password})
       |> Repo.update()
+      |> revoke_sessions_on_success()
     else
       {:error, :invalid_credentials}
     end
@@ -171,8 +203,13 @@ defmodule Theme1.Auth do
         |> Ecto.Multi.update(:token, Ecto.Changeset.change(reset, used_at: now))
         |> Repo.transaction()
         |> case do
-          {:ok, _changes} -> :ok
-          {:error, _step, changeset, _changes} -> {:error, changeset}
+          {:ok, _changes} ->
+            # A reset password signs every mobile device out.
+            RefreshTokens.revoke_all_for(reset.user_id)
+            :ok
+
+          {:error, _step, changeset, _changes} ->
+            {:error, changeset}
         end
 
       nil -> {:error, :invalid_or_expired_token}
@@ -221,12 +258,20 @@ defmodule Theme1.Auth do
     }
   end
 
-  defp sign_token(%User{id: user_id, role: role}, csrf_token) do
+  # A new password signs every mobile device out.
+  defp revoke_sessions_on_success({:ok, %User{id: user_id}} = result) do
+    RefreshTokens.revoke_all_for(user_id)
+    result
+  end
+
+  defp revoke_sessions_on_success(error), do: error
+
+  defp sign_token(%User{id: user_id, role: role}, csrf_token, ttl_seconds) do
     claims = %{
       "user_id" => user_id,
       "role" => role.name,
       "csrf_token" => csrf_token,
-      "exp" => DateTime.to_unix(DateTime.utc_now()) + 86_400
+      "exp" => DateTime.to_unix(DateTime.utc_now()) + ttl_seconds
     }
 
     Joken.encode_and_sign(claims, Joken.Signer.create("HS256", jwt_secret()))

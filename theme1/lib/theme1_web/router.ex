@@ -10,6 +10,8 @@ defmodule Theme1Web.Router do
     pipe_through :api
 
     post "/login", AuthController, :login
+    post "/refresh", AuthController, :refresh
+    post "/revoke", AuthController, :revoke
     get "/csrf", AuthController, :csrf
     post "/password-reset/request", AuthController, :request_password_reset
     post "/password-reset/confirm", AuthController, :reset_password
