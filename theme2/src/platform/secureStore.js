@@ -27,12 +27,28 @@ function openStorage() {
   return storagePromise;
 }
 
+function readFrom(storage, key) {
+  return new Promise((resolve, reject) => storage.get(resolve, reject, key));
+}
+
 export const secureStore = {
   async get(key) {
     const storage = await openStorage();
     if (!storage) return memory.get(key) ?? null;
-    // The plugin rejects missing keys: treat that as "no value".
-    return new Promise((resolve) => storage.get(resolve, () => resolve(null), key));
+    try {
+      return await readFrom(storage, key);
+    } catch (error) {
+      // The Keystore key only works shortly after the phone was unlocked. When
+      // it refuses, opening the storage again makes the plugin show Android's
+      // PIN/pattern screen, then the read succeeds.
+      if (/not authenticated/i.test(String(error))) {
+        storagePromise = null;
+        const unlocked = await openStorage();
+        if (unlocked) return readFrom(unlocked, key).catch(() => null);
+      }
+      // Missing key or unreadable value: treat as "no value".
+      return null;
+    }
   },
 
   async set(key, value) {

@@ -1,5 +1,6 @@
 <template>
-  <div v-if="!online || pending > 0 || rejected.length" class="offline-banner" role="status">
+  <div v-if="!online || pending > 0 || rejected.length || authState.sessionWarning" class="offline-banner" role="status">
+    <p v-if="authState.sessionWarning">{{ authState.sessionWarning }}</p>
     <p v-if="!online">
       <strong>Offline.</strong> You are seeing the data last saved on this device.
       Actions marked "works offline" are kept and sent when the connection returns.
@@ -18,6 +19,7 @@
 
 <script setup>
 import { network } from "../platform/network";
+import { authState } from "../services/auth";
 import { outbox } from "../data/outbox";
 import { sync } from "../data/sync";
 

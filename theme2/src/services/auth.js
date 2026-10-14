@@ -29,6 +29,11 @@ export const MAX_OFFLINE_MS = 7 * 24 * 3600 * 1000;
 
 const SESSION_EXPIRED = "Your session has expired. Please sign in again.";
 const OFFLINE_TOO_LONG = "You have been offline for more than 7 days. Connect to the internet and sign in again.";
+const NO_SCREEN_LOCK =
+  "Your session could not be kept because this phone has no screen lock. Set a PIN, pattern or fingerprint to stay signed in and use the app offline.";
+const SESSION_NOT_KEPT =
+  "This phone has no screen lock: you will have to sign in again each time the app opens, and offline mode is unavailable. Set a PIN, pattern or fingerprint to fix this.";
+const NO_CONNECTION = "No connection. The first sign-in needs the network; after that, the app works offline.";
 
 // Paths that must not trigger a token refresh or carry the CSRF header.
 const AUTH_PATHS = new Set(["/api/auth/login", "/api/auth/refresh", "/api/auth/revoke", "/api/auth/csrf"]);
@@ -45,7 +50,9 @@ export const authState = reactive({
   initialized: false,
   restoredOffline: false,
   locked: false,
-  notice: ""
+  notice: "",
+  // Shown while signed in, e.g. the session will not survive closing the app.
+  sessionWarning: ""
 });
 
 // `silent: true` skips the error sound, for background calls that may fail offline.
@@ -159,6 +166,7 @@ async function endMobileSession(notice) {
   authState.restoredOffline = false;
   authState.locked = false;
   authState.notice = notice;
+  authState.sessionWarning = "";
 }
 
 // Exchange the refresh token for a new pair. One request at a time: parallel
@@ -231,11 +239,21 @@ async function initializeMobileSession() {
     // Storage unavailable: nothing to clean.
   }
 
-  const [refreshToken, profile] = await Promise.all([secureStore.get(REFRESH_TOKEN_KEY), localDb.get(PROFILE_KEY)]);
-  if (!refreshToken || !profile?.user) return; // Never signed in here: sign-in screen.
+  const profile = await localDb.get(PROFILE_KEY);
+  if (!profile?.user) return; // Never signed in here: sign-in screen.
 
+  // Unlock first: a fingerprint/PIN confirmation also authorises the Keystore
+  // key, so the user is asked once instead of twice.
   if (!(await biometric.unlock())) {
     authState.locked = true; // The sign-in screen offers to try again.
+    return;
+  }
+
+  if (!(await secureStore.get(REFRESH_TOKEN_KEY))) {
+    // Profile kept but no token: the phone has no screen lock, so the Keystore
+    // could not keep the session after the app closed.
+    await localDb.remove(PROFILE_KEY);
+    authState.notice = NO_SCREEN_LOCK;
     return;
   }
   await openMobileSession(profile);
@@ -314,11 +332,17 @@ export async function revalidateSession() {
 
 // Sign in (always online). The mobile app stores its tokens in the Keystore.
 export async function login(credentials) {
-  const response = await apiFetch("/api/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(isMobile ? { ...credentials, client: "mobile" } : credentials)
-  });
+  let response;
+  try {
+    response = await apiFetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(isMobile ? { ...credentials, client: "mobile" } : credentials)
+    });
+  } catch {
+    // The password can only be checked by the server.
+    throw new Error(NO_CONNECTION);
+  }
 
   const data = await response.json();
   if (!response.ok) {
@@ -329,6 +353,9 @@ export async function login(credentials) {
   if (isMobile) {
     await clearPreviousUserCaches(data.user.id);
     await storeMobileSession(data);
+    // Without a screen lock the Keystore refuses to work: warn now rather than
+    // when the app reopens offline signed out.
+    authState.sessionWarning = (await secureStore.isPersistent()) ? "" : SESSION_NOT_KEPT;
   } else {
     authState.user = data.user;
     authState.csrfToken = data.csrf_token;
