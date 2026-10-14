@@ -25,13 +25,14 @@ defmodule Theme1.TimeTracking do
   fix a stale open session with a manual edit; the auto-close worker will
   also cap orphaned sessions after #{@max_session_hours}h.
   """
-  def clock_in(%Theme1.User{id: user_id} = user) do
+  def clock_in(%Theme1.User{id: user_id} = user, at \\ nil) do
     case find_open_session(user_id) do
       %WorkingTime{} ->
         {:error, :already_clocked_in}
 
       nil ->
-        now = DateTime.utc_now() |> DateTime.truncate(:second)
+        # `at` is set when an offline event is replayed with a trusted device time.
+        now = at || DateTime.utc_now() |> DateTime.truncate(:second)
 
         attrs = %{
           start: now,
@@ -54,15 +55,32 @@ defmodule Theme1.TimeTracking do
   Uses the clamped overtime formula: only overlap with [shift_end_at, ∞)
   counts, so late clock-ins don't inflate overtime.
   """
-  def clock_out(%Theme1.User{id: user_id} = user) do
+  def clock_out(%Theme1.User{id: user_id} = user, at \\ nil) do
     case find_open_session(user_id) do
       nil ->
         {:error, :not_clocked_in}
 
       %WorkingTime{} = record ->
-        now = DateTime.utc_now() |> DateTime.truncate(:second)
+        now = at || DateTime.utc_now() |> DateTime.truncate(:second)
         close_and_save(record, user, now, false)
     end
+  end
+
+  @doc """
+  Start of the user's open session, or nil. Used to validate an offline clock-out time.
+  """
+  def open_session_start(user_id) do
+    case find_open_session(user_id) do
+      %WorkingTime{start: start} -> start
+      nil -> nil
+    end
+  end
+
+  @doc """
+  End of the user's most recent closed session, or nil. Used to validate an offline clock-in time.
+  """
+  def last_session_end(user_id) do
+    Repo.one(from wt in WorkingTime, where: wt.user_id == ^user_id and not is_nil(wt.end), select: max(wt.end))
   end
 
   @doc """

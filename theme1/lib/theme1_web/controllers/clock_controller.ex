@@ -1,16 +1,16 @@
 defmodule Theme1Web.ClockController do
   use Theme1Web, :controller
 
-  alias Theme1.{Repo, User, TimeTracking}
+  alias Theme1.{Clocks, Repo, User, TimeTracking}
 
   @doc """
   Clock-in for a user. Any authenticated user can clock themselves in;
   admins can clock anyone in. Managers can clock their team members.
   """
-  def clock_in(conn, %{"userID" => user_id}) do
+  def clock_in(conn, %{"userID" => user_id} = params) do
     with {:ok, target_user} <- fetch_target_user(conn, user_id),
-         {:ok, record} <- TimeTracking.clock_in(target_user) do
-      json(conn, serialize(record))
+         {:ok, record, clock} <- Clocks.record_clock(target_user, :in, clock_opts(conn, target_user, params)) do
+      respond(conn, record, clock)
     else
       {:error, :forbidden} ->
         conn |> put_status(:forbidden) |> json(%{error: "You cannot clock this user"})
@@ -31,10 +31,10 @@ defmodule Theme1Web.ClockController do
   @doc """
   Clock-out for a user. Same authorization as clock_in.
   """
-  def clock_out(conn, %{"userID" => user_id}) do
+  def clock_out(conn, %{"userID" => user_id} = params) do
     with {:ok, target_user} <- fetch_target_user(conn, user_id),
-         {:ok, record} <- TimeTracking.clock_out(target_user) do
-      json(conn, serialize(record))
+         {:ok, record, clock} <- Clocks.record_clock(target_user, :out, clock_opts(conn, target_user, params)) do
+      respond(conn, record, clock)
     else
       {:error, :forbidden} ->
         conn |> put_status(:forbidden) |> json(%{error: "You cannot clock this user"})
@@ -58,7 +58,8 @@ defmodule Theme1Web.ClockController do
   """
   def status(conn, %{"userID" => user_id}) do
     with {:ok, target_user} <- fetch_target_user(conn, user_id) do
-      json(conn, TimeTracking.current_status(target_user))
+      # server_time lets the mobile app measure its clock drift for offline events.
+      json(conn, Map.put(TimeTracking.current_status(target_user), :server_time, DateTime.utc_now()))
     else
       {:error, :forbidden} ->
         conn |> put_status(:forbidden) |> json(%{error: "You cannot view this user's clock"})
@@ -89,6 +90,28 @@ defmodule Theme1Web.ClockController do
       :error -> {:error, :not_found}
       nil -> {:error, :not_found}
     end
+  end
+
+  ## Offline support
+
+  # The idempotency key comes from the body or the Idempotency-Key header. A
+  # device time is only honoured when users clock themselves: nobody backdates
+  # someone else's clock.
+  defp clock_opts(conn, target_user, params) do
+    [
+      idempotency_key: params["idempotency_key"] || List.first(get_req_header(conn, "idempotency-key")),
+      device_time: params["device_time"],
+      trust_device_time: target_user.id == conn.assigns.current_user.id
+    ]
+  end
+
+  # A replayed event was already applied: confirm it without clocking again.
+  defp respond(conn, :duplicate, clock) do
+    json(conn, %{duplicate: true, status: clock.status, time: clock.time, time_source: clock.time_source})
+  end
+
+  defp respond(conn, record, clock) do
+    json(conn, record |> serialize() |> Map.put(:time_source, clock.time_source))
   end
 
   ## Serialization
