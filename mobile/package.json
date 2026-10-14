@@ -13,11 +13,27 @@
   "author": "Apache Cordova Team",
   "license": "Apache-2.0",
   "devDependencies": {
-    "cordova-android": "^15.1.0"
+    "cordova-android": "^15.1.0",
+    "cordova-plugin-dialogs": "^2.0.2",
+    "cordova-plugin-fingerprint-aio": "^6.0.1",
+    "cordova-plugin-network-information": "^3.1.0",
+    "cordova-plugin-progress-indicator": "^1.0.3",
+    "cordova-plugin-secure-storage-echo": "^5.1.1",
+    "cordova-plugin-vibration": "^3.1.1",
+    "cordova-sqlite-storage": "^7.0.0"
   },
   "cordova": {
     "platforms": [
       "android"
-    ]
+    ],
+    "plugins": {
+      "cordova-sqlite-storage": {},
+      "cordova-plugin-network-information": {},
+      "cordova-plugin-dialogs": {},
+      "cordova-plugin-vibration": {},
+      "com.filfatstudios.spinnerdialog": {},
+      "cordova-plugin-secure-storage-echo": {},
+      "cordova-plugin-fingerprint-aio": {}
+    }
   }
 }

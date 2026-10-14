@@ -13,17 +13,24 @@ defmodule Theme1Web.AuthPlug do
   def call(conn, _opts) do
     conn = fetch_cookies(conn)
 
-    case token_from_conn(conn) do
+    case token_with_source(conn) do
       nil -> unauthorized(conn, "Authentication required")
-      token -> authenticate_token(conn, token)
+      {token, source} -> authenticate_token(conn, token, source)
+    end
+  end
+
+  def token_from_conn(conn) do
+    case token_with_source(conn) do
+      {token, _source} -> token
+      nil -> nil
     end
   end
 
   # The cookie wins when both are present, so the web flow is unchanged.
-  def token_from_conn(conn) do
+  defp token_with_source(conn) do
     case conn.cookies[@auth_cookie] do
-      token when is_binary(token) -> token
-      _ -> bearer_token(conn)
+      token when is_binary(token) -> {token, :cookie}
+      _ -> if token = bearer_token(conn), do: {token, :bearer}
     end
   end
 
@@ -34,8 +41,11 @@ defmodule Theme1Web.AuthPlug do
     end
   end
 
-  defp authenticate_token(conn, token) do
+  # CSRF only threatens credentials the browser sends by itself (the cookie). A
+  # bearer header is always added explicitly by the app, so it needs no CSRF check.
+  defp authenticate_token(conn, token, source) do
     case Auth.verify_token(token) do
+      {:ok, user, _claims} when source == :bearer -> assign(conn, :current_user, user)
       {:ok, user, claims} -> validate_csrf(conn, user, claims)
       {:error, _reason} -> unauthorized(conn, "Invalid or expired authentication")
     end

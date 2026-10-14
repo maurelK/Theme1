@@ -3,18 +3,20 @@ defmodule Theme1Web.AuthController do
 
   alias Theme1.Auth
 
-  # Issue an HttpOnly JWT cookie and return only the CSRF token to the browser.
-  # The mobile app (client: "mobile") cannot use the cross-site cookie, so it also
-  # receives the JWT to send back as an Authorization bearer header.
+  # Web: issue an HttpOnly JWT cookie and return only the CSRF token.
+  # Mobile (client: "mobile"): the cross-site cookie is never sent, so return a
+  # short-lived JWT for the Authorization header and a revocable refresh token.
   def login(conn, %{"email" => email, "password" => password} = params) do
-    case Auth.authenticate(email, password) do
-      {:ok, %{user: user, jwt: jwt, csrf_token: csrf_token}} ->
-        body = %{user: user, csrf_token: csrf_token}
-        body = if params["client"] == "mobile", do: Map.put(body, :token, jwt), else: body
+    mobile? = params["client"] == "mobile"
 
+    case Auth.authenticate(email, password, if(mobile?, do: :mobile, else: :web)) do
+      {:ok, %{user: user, jwt: jwt, refresh_token: refresh_token}} when mobile? ->
+        json(conn, %{user: user, token: jwt, refresh_token: refresh_token})
+
+      {:ok, %{user: user, jwt: jwt, csrf_token: csrf_token}} ->
         conn
         |> put_auth_cookie(jwt)
-        |> json(body)
+        |> json(%{user: user, csrf_token: csrf_token})
 
       {:error, :invalid_credentials} ->
         conn
@@ -27,6 +29,29 @@ defmodule Theme1Web.AuthController do
     conn
     |> put_status(:unprocessable_entity)
     |> json(%{error: "Email and password are required"})
+  end
+
+  # Mobile: trade a refresh token for a new JWT and a new refresh token (rotation).
+  # Public route: the refresh token itself is the credential.
+  def refresh(conn, %{"refresh_token" => refresh_token}) do
+    case Auth.refresh_session(refresh_token) do
+      {:ok, %{user: user, jwt: jwt, refresh_token: new_refresh_token}} ->
+        json(conn, %{user: user, token: jwt, refresh_token: new_refresh_token})
+
+      {:error, _reason} ->
+        conn |> put_status(:unauthorized) |> json(%{error: "Session expired, please sign in again"})
+    end
+  end
+
+  def refresh(conn, _params) do
+    conn |> put_status(:unauthorized) |> json(%{error: "Session expired, please sign in again"})
+  end
+
+  # Mobile sign-out: revoke this device's refresh token. Works even with an
+  # expired JWT, since holding the refresh token is enough to give it up.
+  def revoke(conn, params) do
+    Theme1.RefreshTokens.revoke(params["refresh_token"])
+    json(conn, %{ok: true})
   end
 
   # Always return the same response so callers cannot enumerate registered emails.

@@ -2,6 +2,7 @@
   <div class="app-layout">
     <AppTopbar />
     <main class="app-layout-content">
+      <OfflineBanner />
       <slot />
     </main>
     <AppBottomNav />
@@ -11,6 +12,7 @@
 <script setup>
 import AppTopbar from "./AppTopbar.vue";
 import AppBottomNav from "./AppBottomNav.vue";
+import OfflineBanner from "./OfflineBanner.vue";
 </script>
 
 <style scoped>

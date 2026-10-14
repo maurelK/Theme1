@@ -21,7 +21,8 @@
 <script setup>
 import { computed } from "vue";
 import { useRouter } from "vue-router";
-import { authState, logout } from "../services/auth";
+import { authState } from "../services/auth";
+import { signOutWithConfirmation } from "../services/signOut";
 import { ICONS, navLinksFor } from "../utils/navigation";
 
 const router = useRouter();
@@ -29,9 +30,9 @@ const router = useRouter();
 const navLinks = computed(() => navLinksFor(authState.user?.role));
 const signOutIcon = ICONS.signOut;
 
-async function signOut() {
-  await logout();
-  await router.push({ name: "Login" });
+// Warns first when offline actions are still waiting to be sent.
+function signOut() {
+  return signOutWithConfirmation(router);
 }
 </script>
 

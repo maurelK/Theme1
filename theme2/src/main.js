@@ -2,10 +2,13 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import './styles/global.css'
+import { sync } from './data/sync'
 
 // Mount through the router so its auth/session guard runs before the first view.
 function startApp() {
   createApp(App).use(router).mount('#app')
+  // Replay actions recorded offline (clock in/out) whenever the network allows.
+  sync.start()
 }
 
 // In the Cordova app, wait until the native bridge is ready.

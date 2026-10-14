@@ -137,7 +137,10 @@ defmodule Theme1Web.UserController do
 
           true ->
             case user |> User.soft_delete_changeset() |> Repo.update() do
-              {:ok, _user} -> send_resp(conn, :no_content, "")
+              {:ok, _user} ->
+                # Sign the deleted account out of every mobile device.
+                Theme1.RefreshTokens.revoke_all_for(user.id)
+                send_resp(conn, :no_content, "")
               {:error, changeset} ->
                 conn
                 |> put_status(:unprocessable_entity)

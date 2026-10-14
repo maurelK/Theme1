@@ -13,7 +13,7 @@
 
       <form class="editor" @submit.prevent="updateAccount">
         <div class="section-title">
-          <div><p class="eyebrow">Account</p><h3>Edit my details</h3></div>
+          <div><p class="eyebrow">Account</p><h3>Edit my details</h3><p class="muted">Works offline.</p></div>
         </div>
         <div class="form-grid">
           <label>Full name<input v-model="username" type="text" autocomplete="name" required></label>
@@ -43,9 +43,10 @@
         </div>
         <p v-if="passwordMessage.text" class="editor-alert" :class="alertClass(passwordMessage)" role="status">{{ passwordMessage.text }}</p>
         <div class="editor-actions">
-          <button class="button button-primary" type="submit">Update password</button>
+          <button class="button button-primary" type="submit" :disabled="!online">Update password</button>
           <button class="text-button" type="button" @click="signOut">Sign out</button>
         </div>
+        <OnlineOnlyNote />
       </form>
 
       <section class="danger-zone">
@@ -54,9 +55,10 @@
           <h3>Delete my account</h3>
           <p class="muted">You will no longer be able to sign in. Your working-time records are kept for reporting.</p>
         </div>
-        <button class="danger-button" type="button" :disabled="deleting" @click="deleteAccount">
+        <button class="danger-button" type="button" :disabled="deleting || !online" @click="deleteAccount">
           {{ deleting ? "Deleting..." : "Delete my account" }}
         </button>
+        <OnlineOnlyNote />
         <p v-if="deleteError" class="editor-alert editor-alert-error" role="alert">{{ deleteError }}</p>
       </section>
     </main>
@@ -67,11 +69,17 @@
 import { computed, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { apiFetch, authState, logout } from "../services/auth";
+import { signOutWithConfirmation } from "../services/signOut";
+import { sendOrQueue } from "../data/mutations";
+import { network } from "../platform/network";
+import OnlineOnlyNote from "../components/OnlineOnlyNote.vue";
 import { formatRole } from "../utils/roles";
 import AppLayout from "../components/AppLayout.vue";
 import PasswordField from "../components/PasswordField.vue";
 
 const router = useRouter();
+// Password changes and account deletion need the server; editing details works offline.
+const online = network.online;
 
 const username = ref(authState.user?.username || "");
 const email = ref(authState.user?.email || "");
@@ -120,18 +128,19 @@ async function updateAccount() {
   savingAccount.value = true;
   setMessage(accountMessage, "");
   try {
-    const response = await apiFetch(`/api/users/${authState.user.id}`, {
+    // Works offline: queued and sent when the connection returns.
+    const { queued } = await sendOrQueue({
+      type: "account",
+      label: "Update my details",
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: name, email: address })
+      path: `/api/users/${authState.user.id}`,
+      body: { username: name, email: address }
     });
-    if (!response.ok) return setMessage(accountMessage, await errorText(response, "Unable to update your details."), true);
-
-    const body = await response.json();
-    const updated = body.data || body;
-    // Keep the header and navigation in sync with the saved values.
-    authState.user = { ...authState.user, username: updated.username, email: updated.email };
-    setMessage(accountMessage, "Details updated.");
+    // Keep the header and navigation in sync with the new values right away.
+    authState.user = { ...authState.user, username: name, email: address };
+    setMessage(accountMessage, queued ? "Saved on this device. It will be sent when the connection returns." : "Details updated.");
+  } catch (err) {
+    setMessage(accountMessage, err.message || "Unable to update your details.", true);
   } finally {
     savingAccount.value = false;
   }
@@ -151,9 +160,9 @@ async function changePassword() {
   setMessage(passwordMessage, "Password updated.");
 }
 
-async function signOut() {
-  await logout();
-  await router.push({ name: "Login" });
+// Warns first when offline actions are still waiting to be sent.
+function signOut() {
+  return signOutWithConfirmation(router);
 }
 
 // Two-step confirmation: a dialog, then typing the account email.
@@ -175,7 +184,9 @@ async function deleteAccount() {
       deleteError.value = await errorText(response, "Unable to delete your account.");
       return;
     }
-    await signOut();
+    // The account no longer exists: sign out without asking.
+    await logout();
+    await router.push({ name: "Login" });
   } finally {
     deleting.value = false;
   }

@@ -20,10 +20,11 @@
             <label>Role<select v-model="invite.role" required>
               <option v-for="name in INVITABLE_ROLES" :key="name" :value="name">{{ formatRole(name) }}</option>
             </select></label>
-            <button class="dashboard-button" type="submit" :disabled="inviting">
+            <button class="dashboard-button" type="submit" :disabled="inviting || !online">
               {{ inviting ? "Sending..." : "Send invite" }}
             </button>
           </form>
+          <OnlineOnlyNote />
           <p v-if="inviteFeedback.text" :class="feedbackClass(inviteFeedback)" role="status">{{ inviteFeedback.text }}</p>
         </article>
 
@@ -42,8 +43,10 @@
                 {{ formatRole(availableRole.name) }}
               </option>
             </select></label>
-            <button class="dashboard-button" type="submit">Save role</button>
+            <button class="dashboard-button" type="submit" :disabled="!online">Save role</button>
           </form>
+          <!-- Roles are never changed from data that may be outdated. -->
+          <OnlineOnlyNote />
           <p v-if="roleFeedback.text" :class="feedbackClass(roleFeedback)" role="status">{{ roleFeedback.text }}</p>
         </article>
 
@@ -52,7 +55,7 @@
           <h2>Teams</h2>
           <p>{{ teams.length }} team{{ teams.length === 1 ? "" : "s" }}. Add or remove members from the teams page.</p>
           <form class="dashboard-admin-form" @submit.prevent="createTeam">
-            <label>New team name<input v-model="newTeamName" type="text" required></label>
+            <label>New team name (works offline)<input v-model="newTeamName" type="text" required></label>
             <button class="dashboard-button" type="submit">Create team</button>
           </form>
           <p v-if="teamFeedback.text" :class="feedbackClass(teamFeedback)" role="status">{{ teamFeedback.text }}</p>
@@ -64,9 +67,10 @@
           <h2>Shifts</h2>
           <p>Set the shift for a user or a team. Users inherit their team's shift, or the default one.</p>
           <div class="shift-config-targets">
-            <button class="dashboard-button" type="button" @click="pickerMode = 'user'">Set a user's shift</button>
-            <button class="dashboard-button" type="button" @click="pickerMode = 'team'">Set a team's shift</button>
+            <button class="dashboard-button" type="button" :disabled="!online" @click="pickerMode = 'user'">Set a user's shift</button>
+            <button class="dashboard-button" type="button" :disabled="!online" @click="pickerMode = 'team'">Set a team's shift</button>
           </div>
+          <OnlineOnlyNote />
           <p v-if="shiftFeedback" class="dashboard-feedback" role="status">{{ shiftFeedback }}</p>
         </article>
       </section>
@@ -93,6 +97,9 @@
 <script setup>
 import { onMounted, reactive, ref } from "vue";
 import { apiFetch } from "../services/auth";
+import { network } from "../platform/network";
+import { sendOrQueue } from "../data/mutations";
+import OnlineOnlyNote from "../components/OnlineOnlyNote.vue";
 import { formatRole } from "../utils/roles";
 import AppLayout from "../components/AppLayout.vue";
 import ShiftEditorModal from "../components/ShiftEditorModal.vue";
@@ -101,6 +108,9 @@ import "./Dashboard.css";
 
 // Administrator is left out on purpose: granting it is a separate, deliberate role change.
 const INVITABLE_ROLES = ["employee", "manager", "hr_payroll"];
+
+// Inviting, changing roles and shifts need live data; creating a team works offline.
+const online = network.online;
 
 const users = ref([]);
 const roles = ref([]);
@@ -126,25 +136,35 @@ onMounted(async () => {
   if (!usersOk || !rolesOk || !teamsOk) loadError.value = "Some data could not be loaded. Refresh the page to try again.";
 });
 
+// Offline, apiFetch answers with the copy saved on the phone; without one, the load fails quietly.
+async function getJson(path) {
+  try {
+    const response = await apiFetch(path, { silent: true });
+    return response.ok ? await response.json() : null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadUsers() {
-  const response = await apiFetch("/api/users");
-  if (response.ok) users.value = await response.json();
-  return response.ok;
+  const data = await getJson("/api/users");
+  if (data) users.value = data;
+  return Boolean(data);
 }
 
 async function loadRoles() {
-  const response = await apiFetch("/api/roles");
-  if (response.ok) {
-    roles.value = await response.json();
+  const data = await getJson("/api/roles");
+  if (data) {
+    roles.value = data;
     roleForm.role = roles.value[0]?.name || "";
   }
-  return response.ok;
+  return Boolean(data);
 }
 
 async function loadTeams() {
-  const response = await apiFetch("/api/teams");
-  if (response.ok) teams.value = await response.json();
-  return response.ok;
+  const data = await getJson("/api/teams");
+  if (data) teams.value = data;
+  return Boolean(data);
 }
 
 function setFeedback(target, text, error = false) {
@@ -203,21 +223,24 @@ async function changeRole() {
   await loadUsers();
 }
 
+// Works offline: queued and created when the connection returns (see Teams page).
 async function createTeam() {
-  const response = await apiFetch("/api/teams", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: newTeamName.value })
-  });
-
-  if (!response.ok) {
-    setFeedback(teamFeedback, await errorText(response, "Unable to create the team."), true);
-    return;
+  const name = newTeamName.value.trim();
+  try {
+    const { queued } = await sendOrQueue({
+      type: "team",
+      label: `Create team "${name}"`,
+      method: "POST",
+      path: "/api/teams",
+      body: { name },
+      meta: { kind: "create", name }
+    });
+    setFeedback(teamFeedback, queued ? `Team "${name}" saved on this device. It will be created when the connection returns.` : `Team "${name}" created.`);
+    newTeamName.value = "";
+    if (!queued) await loadTeams();
+  } catch (err) {
+    setFeedback(teamFeedback, err.message, true);
   }
-
-  setFeedback(teamFeedback, `Team "${newTeamName.value}" created.`);
-  newTeamName.value = "";
-  await loadTeams();
 }
 
 function onPickerSelected(item) {

@@ -1,3 +1,4 @@
+import { watch } from "vue";
 import { createRouter, createWebHistory, createWebHashHistory } from "vue-router";
 import ChartManager from "../components/ChartManager.vue";
 import WorkingTimes from "../components/WorkingTimes.vue";
@@ -186,5 +187,16 @@ router.beforeEach(async (to) => {
 
   return true;
 });
+
+// A session can end in the background (refresh refused during a sync, account
+// deleted): leave the protected page instead of showing failing requests.
+watch(
+  () => authState.user,
+  (user) => {
+    if (!user && authState.initialized && router.currentRoute.value.meta.requiresAuth) {
+      router.push({ name: "Login" });
+    }
+  }
+);
 
 export default router;

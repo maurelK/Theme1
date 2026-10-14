@@ -60,13 +60,14 @@
           </span>
         </div>
 
+        <p v-if="!online" class="wt-muted" role="note">Saving entries requires a connection.</p>
         <!-- Action Buttons -->
         <div class="wt-actions wt-actions-end">
           <button
             v-if="!isEditMode"
             type="button"
             class="btn-wt btn-primary"
-            :disabled="saving || !start || !end"
+            :disabled="saving || !start || !end || !online"
             @click="createWorkingTime"
           >
             <span>{{ saving ? 'Creating...' : 'Create working time' }}</span>
@@ -76,7 +77,7 @@
             <button
               type="button"
               class="btn-wt btn-primary"
-              :disabled="saving || !start || !end"
+              :disabled="saving || !start || !end || !online"
               @click="updateWorkingTime"
             >
               <span>{{ saving ? 'Saving...' : 'Update' }}</span>
@@ -84,7 +85,7 @@
             <button
               type="button"
               class="btn-wt btn-danger"
-              :disabled="saving"
+              :disabled="saving || !online"
               @click="deleteWorkingTime"
             >
               <span>Delete</span>
@@ -99,6 +100,7 @@
 <script>
 import "./WorkingTime.css";
 import { apiFetch } from "../services/auth";
+import { network } from "../platform/network";
 import {
   utcToLocalInput,
   localInputToUtc,
@@ -138,6 +140,10 @@ export default {
   },
 
   computed: {
+    online() {
+      return network.online.value;
+    },
+
     currentUserId() {
       if (this.userId) return this.userId;
       return this.$route.params.userid || this.$route.params.userID || 1;

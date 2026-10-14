@@ -1,23 +1,12 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { apiFetch } from "../services/auth";
-import { notifyClockIn, notifyClockOut, notifyError } from "../services/feedback";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { useClock } from "../composables/useClock";
+import { notifyClockIn, notifyClockOut, notifyError, unlockAudio } from "../services/feedback";
 import { parseUtc, formatTimeShort, formatMinutes } from "../utils/datetime";
 
 const props = defineProps({
   userId: { type: [Number, String], default: null }
 });
-
-// Wall clock - ticks every second.
-const now = ref(new Date());
-let tickHandle = null;
-
-// Server state.
-const loading = ref(false);
-const statusLoading = ref(false);
-const status = ref(null);
-const error = ref("");
-const lastAction = ref("");
 
 const userId = computed(() => {
   const u = props.userId;
@@ -27,17 +16,34 @@ const userId = computed(() => {
   return u;
 });
 
+// Online and offline clock state (see composables/useClock.js).
+const {
+  status,
+  clockedIn,
+  pending,
+  loading,
+  statusLoading,
+  error,
+  fromCache,
+  online,
+  toggle: toggleClock
+} = useClock(userId);
+
+const lastAction = ref("");
+
+// Wall clock - ticks every second.
+const now = ref(new Date());
+let tickHandle = null;
+
 const formattedTime = computed(() => {
   const t = now.value;
   const pad = (n) => String(n).padStart(2, "0");
   return `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
 });
 
-const clockedIn = computed(() => Boolean(status.value?.in));
-
 // Live elapsed: recompute from `since` on every tick, using the browser's
 // current time. Never trust the server's duration_minutes snapshot for the
-// running counter — it only refreshes on loadStatus().
+// running counter.
 const elapsedLabel = computed(() => {
   if (!clockedIn.value) return "0m";
   const start = parseUtc(status.value?.since);
@@ -75,75 +81,23 @@ const shiftLabel = computed(() => {
   return `${fmt(s.start_minutes)}-${fmt(s.end_minutes)} (${shiftTzLabel(s.tz_offset_minutes ?? 0)}) - ${s.source}`;
 });
 
-async function loadStatus() {
-  if (!userId.value) return;
-  statusLoading.value = true;
-
-  try {
-    const res = await apiFetch(`/api/clocks/${userId.value}/status`);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Unable to load status (${res.status})`);
-    }
-    status.value = await res.json();
-    // Note: do NOT clear `error.value` here — see BUG-QA004-002. Errors set
-    // by `toggle()` should persist until the user takes a new action.
-  } catch (err) {
-    error.value = err.message || "Unable to load clock status.";
-    notifyError();
-  } finally {
-    statusLoading.value = false;
-  }
-}
-
 async function toggle() {
-  if (!userId.value) return;
-  loading.value = true;
-  error.value = "";
+  // Must run before the first await so the confirmation sound is allowed to play.
+  unlockAudio();
   lastAction.value = "";
-
-  const action = clockedIn.value ? "out" : "in";
 
   try {
-    const res = await apiFetch(`/api/clocks/${userId.value}/${action}`, {
-      method: "POST"
-    });
-
-    const body = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      if (res.status === 409) {
-        error.value =
-          body.error || (action === "in" ? "Already clocked in." : "Not currently clocked in.");
-      } else {
-        error.value = body.error || `Request failed (${res.status})`;
-      }
-      notifyError();
-      // Refresh status anyway — server may have moved it.
-      await loadStatus();
-      return;
-    }
-
-    lastAction.value = action === "in" ? "Clocked in." : "Clocked out.";
+    const { action, queued } = await toggleClock();
+    if (!action) return;
+    const done = action === "in" ? "Clocked in" : "Clocked out";
+    lastAction.value = queued ? `${done} offline. It will be sent automatically.` : `${done}.`;
     action === "in" ? notifyClockIn() : notifyClockOut();
-    // Force an immediate status reload so the UI reflects the new state.
-    await loadStatus();
-  } catch (err) {
-    error.value = err.message || "Unable to update clock.";
+  } catch {
     notifyError();
-  } finally {
-    loading.value = false;
   }
 }
-
-watch(userId, () => {
-  error.value = "";
-  lastAction.value = "";
-  loadStatus();
-});
 
 onMounted(() => {
-  loadStatus();
   tickHandle = setInterval(() => {
     now.value = new Date();
   }, 1000);
@@ -167,6 +121,8 @@ onBeforeUnmount(() => {
           Clocked in since <strong>{{ sinceLabel }}</strong> - elapsed <strong>{{ elapsedLabel }}</strong>
         </span>
         <span v-else>Not clocked in.</span>
+        <span v-if="pending" class="clock-tag">Not sent yet</span>
+        <span v-else-if="fromCache && status" class="clock-tag">Last known state</span>
       </div>
 
       <div class="clock-shift-line">Shift: {{ shiftLabel }}</div>
@@ -174,14 +130,18 @@ onBeforeUnmount(() => {
       <button
         class="clock-button"
         :class="{ 'is-out': clockedIn }"
-        :disabled="loading || statusLoading"
+        :disabled="loading || (statusLoading && !status)"
         @click="toggle"
       >
         {{ loading ? "Working..." : clockedIn ? "Clock Out" : "Clock In" }}
       </button>
 
-      <p v-if="error" class="clock-alert clock-alert-error">{{ error }}</p>
-      <p v-else-if="lastAction" class="clock-alert clock-alert-success">{{ lastAction }}</p>
+      <!-- Announced to screen readers, as the spoken counterpart of the clock sounds. -->
+      <p v-if="error" class="clock-alert clock-alert-error" role="alert">{{ error }}</p>
+      <p v-else-if="lastAction" class="clock-alert clock-alert-success" role="status">{{ lastAction }}</p>
+
+      <!-- The offline banner (AppLayout) shows pending and refused actions. -->
+      <p v-if="!online" class="clock-pending">Clocking works offline.</p>
     </div>
   </main>
 </template>
@@ -273,4 +233,15 @@ onBeforeUnmount(() => {
 .clock-alert-success {
   color: #287c78;
 }
+
+/* Offline mode */
+.clock-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid #8a5a00;
+  color: #5c3d00;
+  font-size: 12px;
+}
+.clock-pending { margin: 12px 0 0; color: #4f5d58; font-size: 14px; }
 </style>

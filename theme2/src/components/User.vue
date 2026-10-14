@@ -67,12 +67,13 @@
               <p v-else-if="editSuccess" class="editor-alert editor-alert-success">{{ editSuccess }}</p>
 
               <div class="editor-actions">
-                <button class="button button-primary" type="submit" :disabled="editSaving">
+                <button class="button button-primary" type="submit" :disabled="editSaving || !online">
                   {{ editSaving ? "Saving..." : "Save changes" }}
                 </button>
-                <button v-if="isAdministrator" class="text-button" type="button" @click="deleteUser">Remove account</button>
+                <button v-if="isAdministrator" class="text-button" type="button" :disabled="!online" @click="deleteUser">Remove account</button>
               </div>
               <p v-if="removeError" class="editor-alert editor-alert-error">{{ removeError }}</p>
+              <OnlineOnlyNote />
             </form>
 
           </div>
@@ -126,6 +127,8 @@ import AppLayout from "./AppLayout.vue";
 // Route profile requests through the shared authenticated API helper.
 import { apiFetch, authState } from "../services/auth";
 import { isMobileApp } from "../utils/platform";
+import { network } from "../platform/network";
+import OnlineOnlyNote from "./OnlineOnlyNote.vue";
 
 export default {
   name: "User",
@@ -135,7 +138,8 @@ export default {
     WorkingTime,
     ClockManager,
     ChartManager,
-    AppLayout
+    AppLayout,
+    OnlineOnlyNote
   },
 
   data() {
@@ -156,6 +160,11 @@ export default {
   },
 
   computed: {
+    // Editing or removing someone else's account needs live data.
+    online() {
+      return network.online.value;
+    },
+
     // Reflect the server-authorized role in the authenticated workspace header.
     authUser() {
       return authState.user;

@@ -10,6 +10,8 @@ defmodule Theme1Web.Router do
     pipe_through :api
 
     post "/login", AuthController, :login
+    post "/refresh", AuthController, :refresh
+    post "/revoke", AuthController, :revoke
     get "/csrf", AuthController, :csrf
     post "/password-reset/request", AuthController, :request_password_reset
     post "/password-reset/confirm", AuthController, :reset_password
@@ -19,6 +21,8 @@ defmodule Theme1Web.Router do
   # Session restoration requires the signed JWT and matching CSRF header.
   pipeline :authenticated_api do
     plug Theme1Web.AuthPlug
+    # Replayed offline actions (Idempotency-Key header) are applied once.
+    plug Theme1Web.IdempotencyPlug
   end
 
   # Administrator routes require both authentication and an administrator role.
