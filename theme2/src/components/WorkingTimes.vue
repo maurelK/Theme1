@@ -178,6 +178,7 @@ import {
   formatTimeLong,
   formatDateTimeForDisplay,
   formatMinutes,
+  minutesBetween,
   localInputToUtc,
   browserTimezoneLabel
 } from "../utils/datetime";
@@ -251,9 +252,10 @@ export default {
     totalHoursFormatted() {
       let totalMinutes = 0;
       for (const wt of this.workingTimes) {
-        const ms = new Date(wt.end.replace(" ", "T")) - new Date(wt.start.replace(" ", "T"));
-        if (!isNaN(ms) && ms > 0) {
-          totalMinutes += Math.floor(ms / 60000);
+        // An entry still in progress (no end yet) counts as zero.
+        const minutes = minutesBetween(wt.start, wt.end);
+        if (minutes > 0) {
+          totalMinutes += minutes;
         }
       }
       const hrs = Math.floor(totalMinutes / 60);
@@ -266,9 +268,10 @@ export default {
       let totalMinutes = 0;
       let validCount = 0;
       for (const wt of this.workingTimes) {
-        const ms = new Date(wt.end.replace(" ", "T")) - new Date(wt.start.replace(" ", "T"));
-        if (!isNaN(ms) && ms > 0) {
-          totalMinutes += Math.floor(ms / 60000);
+        // An entry still in progress (no end yet) counts as zero.
+        const minutes = minutesBetween(wt.start, wt.end);
+        if (minutes > 0) {
+          totalMinutes += minutes;
           validCount++;
         }
       }
