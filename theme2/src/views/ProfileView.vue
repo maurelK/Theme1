@@ -67,6 +67,7 @@
 import { computed, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { apiFetch, authState, logout } from "../services/auth";
+import { signOutWithConfirmation } from "../services/signOut";
 import { formatRole } from "../utils/roles";
 import AppLayout from "../components/AppLayout.vue";
 import PasswordField from "../components/PasswordField.vue";
@@ -151,9 +152,9 @@ async function changePassword() {
   setMessage(passwordMessage, "Password updated.");
 }
 
-async function signOut() {
-  await logout();
-  await router.push({ name: "Login" });
+// Warns first when offline actions are still waiting to be sent.
+function signOut() {
+  return signOutWithConfirmation(router);
 }
 
 // Two-step confirmation: a dialog, then typing the account email.
@@ -175,7 +176,9 @@ async function deleteAccount() {
       deleteError.value = await errorText(response, "Unable to delete your account.");
       return;
     }
-    await signOut();
+    // The account no longer exists: sign out without asking.
+    await logout();
+    await router.push({ name: "Login" });
   } finally {
     deleting.value = false;
   }
